@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Get, Query, Res } from '@nestjs/common';
+import { Controller, Post, Get, Body, Query, Res } from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service';
 
 @Controller('whatsapp')
@@ -11,7 +11,7 @@ export class WhatsappController {
     const token = query['hub.verify_token'];
     const challenge = query['hub.challenge'];
 
-    if (mode && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    if (mode && token === process.env.META_WHATSAPP_VERIFY_TOKEN) {
       return res.status(200).send(challenge);
     } else {
       return res.status(403).send('Forbidden');
@@ -25,10 +25,7 @@ export class WhatsappController {
     if (message) {
       const phoneNumber = message.from;
       const text = message.text?.body;
-
-      // Simples resposta automática
-      await this.whatsappService.sendMessage(phoneNumber, `Recebemos sua mensagem: "${text}"`);
-
+      await this.whatsappService.processMessage(phoneNumber, text);
       return { status: 'success' };
     }
 

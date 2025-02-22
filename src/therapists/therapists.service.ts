@@ -24,4 +24,9 @@ export class TherapistsService {
   async getAvailability(therapistId: string) {
     return this.prisma.schedule.findMany({ where: { therapistId } });
   }
+  async findTherapistByName(name: string) {
+    return this.prisma.therapist.findFirst({
+      where: { name: { contains: name, mode: 'insensitive' } },
+    });
+  }
 }
