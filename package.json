@@ -6,7 +6,6 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
@@ -18,7 +17,11 @@
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
     "postinstall": "npx prisma generate && npx prisma migrate deploy",
+    "prebuild": "npx prisma generate",
+    "build": "nest build",
+    "postbuild": "npx prisma migrate deploy",
     "start": "node dist/main"
+
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.0",
