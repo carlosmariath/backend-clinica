@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  password     String
+  role         Role          @default(CLIENT)
+  appointments Appointment[] // 🔹 Relação com agendamentos
+  createdAt    DateTime      @default(now())
+}
+
+enum Role {
+  ADMIN
+  THERAPIST
+  RECEPTIONIST
+  CLIENT
+}
+
+model Therapist {
+  id           String        @id @default(uuid())
+  name         String
+  email        String        @unique
+  phone        String
+  specialty    String
+  schedules    Schedule[] // 🔹 Relação com horários disponíveis
+  appointments Appointment[] // 🔹 Relação com agendamentos
+  createdAt    DateTime      @default(now())
+}
+
+model Schedule {
+  id          String @id @default(uuid())
+  therapistId String
+  dayOfWeek   Int // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+  startTime   String // Exemplo: "09:00"
+  endTime     String // Exemplo: "18:00"
+
+  therapist Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  clientId    String
+  therapistId String
+  date        DateTime
+  startTime   String
+  endTime     String
+  status      AppointmentStatus @default(PENDING)
+
+  client    User      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  therapist Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELED
+  COMPLETED
+}
