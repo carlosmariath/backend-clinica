@@ -5,9 +5,11 @@ import { WhatsappService } from './whatsapp.service';
 import { WhatsappController } from './whatsapp.controller';
 import { AppointmentsModule } from 'src/appointments/appointments.module';
 import { TherapistsModule } from 'src/therapists/therapists.module';
+import { UsersModule } from 'src/users/users.module';
+import { ChatModule } from 'src/chat/chat.module';
 
 @Module({
-  imports: [HttpModule, ConfigModule, AppointmentsModule, TherapistsModule],
+  imports: [HttpModule, ConfigModule, AppointmentsModule, TherapistsModule, UsersModule, ChatModule],
   providers: [WhatsappService],
   controllers: [WhatsappController],
 })

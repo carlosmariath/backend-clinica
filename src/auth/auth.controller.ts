@@ -9,9 +9,9 @@ export class AuthController {
   constructor(private authService: AuthService, private usersService: UsersService) {}
 
   @Post('register')
-  async register(@Body() body: { name: string; email: string; password: string; role: Role }) {
+  async register(@Body() body: { name: string; email: string; password: string; role: Role, phone: string }) {
     
-    return this.usersService.createUser(body.name, body.email, body.password, body.role);
+    return this.usersService.createUser(body.name, body.email, body.password, body.role, body.phone);
   }
 
   @Post('login')
