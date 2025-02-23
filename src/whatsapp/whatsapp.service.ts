@@ -20,8 +20,8 @@ export class WhatsappService {
     private therapistsService: TherapistsService
   ) {
     this.whatsappApiUrl = 'https://graph.facebook.com/v18.0';
-    this.token = this.configService.get<string>('META_WHATSAPP_TOKEN') || '';
-    this.phoneId = this.configService.get<string>('META_WHATSAPP_PHONE_ID') || '';
+    this.token = process.env.META_WHATSAPP_TOKEN || this.configService.get<string>('META_WHATSAPP_TOKEN') || '';
+    this.phoneId = process.env.META_WHATSAPP_PHONE_ID || this.configService.get<string>('META_WHATSAPP_PHONE_ID') || '';
 
     const openaiApiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!openaiApiKey) {

@@ -8,9 +8,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
-  imports: [PrismaModule, UsersModule, AuthModule, TherapistsModule, AppointmentsModule, WhatsappModule, 
-    ConfigModule.forRoot(), // 🔹 Garante que as variáveis de ambiente sejam carregadas
-  ],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), PrismaModule, UsersModule, AuthModule, TherapistsModule, AppointmentsModule, WhatsappModule],
   
 })
 export class AppModule { }
