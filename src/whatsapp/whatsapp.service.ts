@@ -78,6 +78,60 @@ export class WhatsappService {
     const response = await this.openai.chat.completions.create({
       model: "gpt-4-turbo",
       messages: messages,
+      tools: [
+        {
+          type: 'function',
+          function: {
+            name: 'register_client',
+            description: 'Registra um novo cliente para agendamento.',
+            parameters: {
+              type: 'object',
+              properties: {
+                name: { type: 'string', description: 'Nome do cliente.' },
+                email: { type: 'string', format: 'email', description: 'E-mail do cliente.' },
+              },
+              required: ['name', 'email'],
+            },
+          },
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'list_available_dates',
+            description: 'Lista os dias disponíveis para agendamento.',
+          },
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'list_available_times',
+            description: 'Lista horários disponíveis para um determinado dia.',
+            parameters: {
+              type: 'object',
+              properties: {
+                date: { type: 'string', format: 'date', description: 'Data do agendamento (YYYY-MM-DD).' },
+              },
+              required: ['date'],
+            },
+          },
+        },
+        {
+          type: 'function',
+          function: {
+            name: 'schedule_appointment',
+            description: 'Agenda uma sessão de terapia.',
+            parameters: {
+              type: 'object',
+              properties: {
+                therapistName: { type: 'string', description: 'Nome do terapeuta que irá atender.' },
+                date: { type: 'string', format: 'date', description: 'Data do agendamento (YYYY-MM-DD).' },
+                time: { type: 'string', format: 'HH:mm', description: 'Hora do agendamento.' },
+              },
+              required: ['therapistName', 'date', 'time'],
+            },
+          },
+        }
+      ],
       tool_choice: "auto",
       temperature: 0.1,
       top_p: 0.5,
