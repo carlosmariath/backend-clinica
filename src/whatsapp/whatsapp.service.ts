@@ -42,7 +42,7 @@ export class WhatsappService {
 
     // 🔹 Primeiro, verificar se a base de conhecimento tem uma resposta relevante
     const knowledgeAnswer = await this.knowledgeService.searchKnowledge(userMessage);
-    
+
     if (knowledgeAnswer) {
       // 🔹 Passar a resposta pelo GPT para reformulação
       const gptResponse = await this.openai.chat.completions.create({
@@ -136,19 +136,107 @@ export class WhatsappService {
       temperature: 0.1,
       top_p: 0.5,
     });
+    if (response.choices[0].message.tool_calls) {
+      for (const toolCall of response.choices[0].message.tool_calls) {
+        const args = JSON.parse(toolCall.function.arguments);
+        let result: any = [];
+        if (toolCall.function.name === 'register_client') {
+          result = await this.registerClient(phoneNumber, args.name, args.email);
+        }
 
-    history.push({ role: "assistant", content: response.choices[0].message.content });
+        if (toolCall.function.name === 'list_available_dates') {
+          result = await this.listAvailableDates(phoneNumber);
+        }
 
+        if (toolCall.function.name === 'list_available_times') {
+          result = await this.listAvailableTimes(phoneNumber, args.date);
+        }
+
+        if (toolCall.function.name === 'schedule_appointment') {
+          result = await this.scheduleAppointment(phoneNumber, args.date, args.time);
+        }
+        history.push({ role: 'assistant', content: null, function_call: toolCall.function, result });
+        history.push({ role: 'assistant', content: `Resultado da função ${toolCall.function.name}: ${result}` });
+
+        await this.chatService.updateSession(phoneNumber, history);
+        return
+
+      }
+    }
+    history.push({ role: 'assistant', content: response.choices[0].message.content });
     if (session) {
       await this.chatService.updateSession(phoneNumber, history);
     }
 
-    const assistantMessage = response.choices[0].message.content;
-    if (assistantMessage) {
-      return this.sendMessage(phoneNumber, assistantMessage);
-    } else {
-      throw new Error("Assistant response is null");
+    return this.sendMessage(phoneNumber, response.choices[0].message.content || 'Não entendi sua solicitação.');
+  }
+  registerClient(phoneNumber: string, name: any, email: any): any {
+    throw new Error('Method not implemented.');
+  }
+
+  async listAvailableDates(phoneNumber: string) {
+    const availableDates = await this.appointmentsService.getAvailableDates();
+    const message = "Aqui estão as datas disponíveis para agendamento:\n" + availableDates.map(date => `📅 ${date}`).join("\n");
+    await this.sendMessage(phoneNumber, message);
+    return availableDates;
+  }
+
+  async listAvailableTimes(phoneNumber: string, date: string) {
+    const availableTimes = await this.appointmentsService.getAvailableTimes(date);
+    const message = `Aqui estão os horários disponíveis para ${date}:\n` + availableTimes.map(time => `🕒 ${time.time}`).join("\n");
+    await this.sendMessage(phoneNumber, message);
+    return availableTimes;
+  }
+
+  async scheduleAppointment(phoneNumber: string, date: string, time: string) {
+    const client = await this.usersService.findByPhone(phoneNumber);
+    if (!client) {
+      return this.sendMessage(phoneNumber, "Desculpe, não encontramos seu cadastro.");
     }
+
+    // 🔹 Buscar terapeutas disponíveis para o horário escolhido
+    const availableTimes = await this.appointmentsService.getAvailableTimes(date);
+    const selectedTime = availableTimes.find(t => t.time === time);
+
+    if (!selectedTime || selectedTime.therapists.length === 0) {
+      return this.sendMessage(phoneNumber, `Infelizmente, não há terapeutas disponíveis para o horário ${time} no dia ${date}.`);
+    }
+
+    if (selectedTime.therapists.length === 1) {
+      // 🔹 Apenas um terapeuta disponível, seguir com o agendamento
+      return this.confirmAppointment(phoneNumber, client.id, selectedTime.therapists[0].id, date, time);
+    }
+
+    // 🔹 Mais de um terapeuta disponível, perguntar ao usuário qual ele prefere
+    this.pendingTherapistSelections[phoneNumber] = { clientId: client.id, date, time, therapists: selectedTime.therapists };
+
+    const therapistOptions = selectedTime.therapists.map((t, index) => `${index + 1}. ${t.name}`).join("\n");
+    return this.sendMessage(
+      phoneNumber,
+      `Temos mais de um terapeuta disponível para o horário ${time} no dia ${date}.\n\nEscolha um terapeuta respondendo com o número correspondente:\n${therapistOptions}`
+    );
+  }
+  async handleTherapistSelection(phoneNumber: string, userMessage: string) {
+    const selection = this.pendingTherapistSelections[phoneNumber];
+
+    if (!selection) {
+      return this.sendMessage(phoneNumber, "Não há nenhuma seleção de terapeuta pendente. Por favor, inicie o agendamento novamente.");
+    }
+
+    const therapistIndex = parseInt(userMessage, 10) - 1;
+    if (isNaN(therapistIndex) || therapistIndex < 0 || therapistIndex >= selection.therapists.length) {
+      return this.sendMessage(phoneNumber, "Por favor, escolha um número válido da lista de terapeutas.");
+    }
+
+    const selectedTherapist = selection.therapists[therapistIndex];
+    delete this.pendingTherapistSelections[phoneNumber];
+
+    return this.confirmAppointment(phoneNumber, selection.clientId, selectedTherapist.id, selection.date, selection.time);
+  }
+  async confirmAppointment(phoneNumber: string, clientId: string, therapistId: string, date: string, time: string) {
+    await this.appointmentsService.createAppointment(clientId, therapistId, date, time, time);
+
+    return this.sendMessage(phoneNumber, `✅ Seu agendamento com o terapeuta foi confirmado para *${date}* às *${time}*.`);
   }
 
   async sendMessage(to: string, message: string) {
