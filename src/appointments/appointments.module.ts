@@ -13,3 +13,4 @@ import { AppointmentsController } from './appointments.controller';
     exports: [AppointmentsService],
 })
 export class AppointmentsModule {}
+

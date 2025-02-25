@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseISO, isValid } from 'date-fns';
+import { AppointmentStatus } from '@prisma/client';
 
 @Injectable()
 export class AppointmentsService {
@@ -145,5 +146,32 @@ export class AppointmentsService {
       time,
       therapists: Array.from(therapists),
     }));
+  }
+  async findAll() {
+    return this.prisma.appointment.findMany({
+      include: { client: true, therapist: true },
+    });
+  }
+  async update(id: string, data: any) {
+    return this.prisma.appointment.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async remove(id: string) {
+    return this.prisma.appointment.delete({ where: { id } });
+  }
+  async updateStatus(appointmentId: string, status: AppointmentStatus) {
+    const validStatuses = ['PENDING', 'CONFIRMED', 'CANCELED', 'COMPLETED'];
+  
+    if (!validStatuses.includes(status)) {
+      throw new BadRequestException('Status inválido.');
+    }
+  
+    return this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status },
+    });
   }
 }

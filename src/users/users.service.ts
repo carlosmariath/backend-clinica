@@ -23,4 +23,10 @@ export class UsersService {
         where: { phone },
     });
 }
+async findAllClients() {
+  return this.prisma.user.findMany({
+    where: { role: 'CLIENT' }, // 🔹 Assumindo que o campo role existe
+    select: { id: true, name: true, email: true, phone: true },
+  });
+}
 }

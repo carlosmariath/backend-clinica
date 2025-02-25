@@ -15,7 +15,7 @@ export class TherapistsService {
     return this.prisma.therapist.findMany({ include: { schedules: true } });
   }
 
-  async defineAvailability(therapistId: string, schedule: { dayOfWeek: number; startTime: string; endTime: string }) {
+  async defineAvailability(therapistId: string, schedule: { dayOfWeek: number; startTime: string; endTime: string; }) {
     return this.prisma.schedule.create({
       data: { therapistId, ...schedule },
     });

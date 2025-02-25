@@ -43,4 +43,5 @@ export class TherapistsController {
   async getAvailability(@Param('therapistId') therapistId: string) {
     return this.therapistsService.getAvailability(therapistId);
   }
+  
 }
