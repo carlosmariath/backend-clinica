@@ -2,10 +2,10 @@ import { Module } from "@nestjs/common";
 import { PrismaModule } from "../prisma/prisma.module";
 import { KnowledgeService } from "./knowledge.service";
 import { KnowledgeController } from "./knowledge.controller";
-import { JwtModule } from "@nestjs/jwt";
+import { AuthModule } from "../auth/auth.module";
 
 @Module({
-  imports: [PrismaModule, JwtModule.register({ secret: process.env.JWT_SECRET })], // 🔹 Importando Prisma para acessar o banco de dados
+  imports: [PrismaModule, AuthModule], // Importando AuthModule que já exporta JwtModule
   providers: [KnowledgeService],
   controllers: [KnowledgeController],
   exports: [KnowledgeService], // 🔹 Exportamos para ser usado no WhatsAppService

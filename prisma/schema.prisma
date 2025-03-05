@@ -85,9 +85,38 @@ model ChatSession {
 }
 
 model KnowledgeBase {
-  id        String  @id @default(uuid())
-  question  String  @unique
-  answer    String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String   @id @default(uuid())
+  question   String   @unique
+  answer     String
+  categoryId String?
+  enabled    Boolean  @default(true)
+  tags       String[]
+  createdBy  String?  // ID do usuário admin que criou
+  viewCount  Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  
+  category   KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  questions  FrequentQuestion[]
+}
+
+model KnowledgeCategory {
+  id          String          @id @default(uuid())
+  name        String          @unique
+  description String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  
+  knowledgeEntries KnowledgeBase[]
+}
+
+model FrequentQuestion {
+  id             String   @id @default(uuid())
+  question       String
+  count          Int      @default(1)
+  lastAskedAt    DateTime @default(now())
+  knowledgeId    String?
+  autoDetected   Boolean  @default(true)
+  
+  knowledgeEntry KnowledgeBase? @relation(fields: [knowledgeId], references: [id], onDelete: SetNull)
 }

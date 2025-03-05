@@ -40,25 +40,39 @@ export class WhatsappService {
     const session = client ? await this.chatService.getOrCreateSession(client.id, phoneNumber) : null;
     const history: any[] = session ? (Array.isArray(session.history) ? session.history : []) : [];
 
-    // 🔹 Primeiro, verificar se a base de conhecimento tem uma resposta relevante
+    // 🔹 Buscar na base de conhecimento com contexto
     const knowledgeAnswer = await this.knowledgeService.searchKnowledge(userMessage);
 
     if (knowledgeAnswer) {
-      // 🔹 Passar a resposta pelo GPT para reformulação
+      // 🔹 Passar a resposta pelo GPT para reformulação e personalização
       const gptResponse = await this.openai.chat.completions.create({
         model: "gpt-4-turbo",
         messages: [
-          { role: "system", content: "Reformule essa resposta de forma amigável e profissional:" },
+          { 
+            role: "system", 
+            content: `Você é um assistente de uma clínica de terapia.
+            
+            ${client ? `O cliente se chama ${client.name}.` : 'Não sabemos o nome do cliente ainda.'}
+            
+            Reformule a resposta da base de conhecimento de forma amigável, personalizada e profissional.
+            Se o nome do cliente for conhecido, use-o na sua resposta para torná-la mais pessoal.
+            Mantenha o tom acolhedor e empático, apropriado para uma clínica de terapia.` 
+          },
           { role: "user", content: `Pergunta: ${userMessage}\nResposta da base de conhecimento: ${knowledgeAnswer}` },
         ],
       });
 
       const reformulatedResponse = gptResponse.choices[0].message.content;
-      if (reformulatedResponse) {
-        return this.sendMessage(phoneNumber, reformulatedResponse);
-      } else {
-        throw new Error("Reformulated response is null");
+      
+      // Salvando a interação no histórico
+      history.push({ role: "user", content: userMessage });
+      history.push({ role: "assistant", content: reformulatedResponse });
+      
+      if (session) {
+        await this.chatService.updateSession(phoneNumber, history);
       }
+      
+      return this.sendMessage(phoneNumber, reformulatedResponse || knowledgeAnswer);
     }
 
     // 🔹 Criar contexto para o GPT caso a base de conhecimento não tenha resposta
