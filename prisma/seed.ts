@@ -1,4 +1,4 @@
-import { PrismaClient, Role } from '@prisma/client';
+import { PrismaClient, Role, TransactionType } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -66,7 +66,7 @@ async function main() {
   });
 
   // Cliente
-  await prisma.user.upsert({
+  const client = await prisma.user.upsert({
     where: { email: 'cliente@email.com' },
     update: {},
     create: {
@@ -285,6 +285,182 @@ async function main() {
       { therapistId: therapist2.id, serviceId: service3.id },
     ],
     skipDuplicates: true,
+  });
+
+  // ====================== NOVOS DADOS PARA PLANOS E FINANÇAS ======================
+
+  console.log('Criando métodos de pagamento...');
+  
+  // Criar métodos de pagamento padrão
+  const pixMethod = await prisma.paymentMethod.create({
+    data: {
+      name: 'PIX',
+      description: 'Pagamento via PIX',
+      isActive: true,
+    },
+  });
+  
+  const creditCardMethod = await prisma.paymentMethod.create({
+    data: {
+      name: 'Cartão de Crédito',
+      description: 'Pagamento com cartão de crédito',
+      isActive: true,
+    },
+  });
+  
+  const debitCardMethod = await prisma.paymentMethod.create({
+    data: {
+      name: 'Cartão de Débito',
+      description: 'Pagamento com cartão de débito',
+      isActive: true,
+    },
+  });
+  
+  const cashMethod = await prisma.paymentMethod.create({
+    data: {
+      name: 'Dinheiro',
+      description: 'Pagamento em espécie',
+      isActive: true,
+    },
+  });
+
+  console.log('Criando categorias financeiras...');
+  
+  // Criar categorias financeiras
+  const serviceSaleCategory = await prisma.financeCategory.create({
+    data: {
+      name: 'Venda de Serviços',
+      type: TransactionType.REVENUE,
+      description: 'Receitas provenientes de serviços prestados',
+    },
+  });
+  
+  const planSaleCategory = await prisma.financeCategory.create({
+    data: {
+      name: 'Venda de Planos',
+      type: TransactionType.REVENUE,
+      description: 'Receitas provenientes de venda de planos de terapia',
+    },
+  });
+  
+  const operationalExpenseCategory = await prisma.financeCategory.create({
+    data: {
+      name: 'Despesas Operacionais',
+      type: TransactionType.EXPENSE,
+      description: 'Gastos relacionados à operação da clínica',
+    },
+  });
+  
+  const salariesCategory = await prisma.financeCategory.create({
+    data: {
+      name: 'Salários',
+      type: TransactionType.EXPENSE,
+      description: 'Pagamentos de salários e comissões',
+    },
+  });
+
+  console.log('Criando planos de terapia...');
+  
+  // Criar planos de terapia
+  const basicPlan = await prisma.therapyPlan.create({
+    data: {
+      name: 'Plano Básico',
+      description: 'Plano básico com 4 sessões',
+      totalSessions: 4,
+      totalPrice: 760.00, // 4 sessões com desconto
+      validityDays: 60, // 2 meses
+      isActive: true,
+      branchId: defaultBranch.id,
+    },
+  });
+  
+  const standardPlan = await prisma.therapyPlan.create({
+    data: {
+      name: 'Plano Padrão',
+      description: 'Plano padrão com 8 sessões',
+      totalSessions: 8,
+      totalPrice: 1440.00, // 8 sessões com desconto
+      validityDays: 90, // 3 meses
+      isActive: true,
+      branchId: defaultBranch.id,
+    },
+  });
+  
+  const premiumPlan = await prisma.therapyPlan.create({
+    data: {
+      name: 'Plano Premium',
+      description: 'Plano premium com 12 sessões',
+      totalSessions: 12,
+      totalPrice: 2040.00, // 12 sessões com desconto maior
+      validityDays: 120, // 4 meses
+      isActive: true,
+      branchId: defaultBranch.id,
+    },
+  });
+
+  console.log('Criando uma assinatura de exemplo para o cliente...');
+  
+  // Criar uma assinatura de plano para o cliente
+  const subscription = await prisma.subscription.create({
+    data: {
+      planId: standardPlan.id,
+      clientId: client.id,
+      branchId: defaultBranch.id,
+      status: 'ACTIVE',
+      token: 'token-exemplo-12345',
+      tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 dias no futuro
+      acceptedAt: new Date(),
+      sessionsLeft: 8, // Começa com todas as sessões do plano
+      validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 dias no futuro
+    },
+  });
+
+  console.log('Criando transações financeiras...');
+  
+  // Criar transações financeiras
+  // Transação para a venda do plano
+  await prisma.financialTransaction.create({
+    data: {
+      type: TransactionType.REVENUE,
+      amount: standardPlan.totalPrice,
+      description: `Venda de Plano Padrão para ${client.name}`,
+      category: 'Venda de Plano',
+      date: new Date(),
+      clientId: client.id,
+      branchId: defaultBranch.id,
+      paymentMethodId: creditCardMethod.id,
+      financeCategoryId: planSaleCategory.id,
+      reference: subscription.id,
+      referenceType: 'subscription',
+    },
+  });
+  
+  // Despesa operacional
+  await prisma.financialTransaction.create({
+    data: {
+      type: TransactionType.EXPENSE,
+      amount: 350.00,
+      description: 'Aluguel do espaço',
+      category: 'Aluguel',
+      date: new Date(),
+      branchId: defaultBranch.id,
+      paymentMethodId: pixMethod.id,
+      financeCategoryId: operationalExpenseCategory.id,
+    },
+  });
+  
+  // Despesa com salário
+  await prisma.financialTransaction.create({
+    data: {
+      type: TransactionType.EXPENSE,
+      amount: 2800.00,
+      description: 'Pagamento de terapeuta',
+      category: 'Salários',
+      date: new Date(),
+      branchId: defaultBranch.id,
+      paymentMethodId: pixMethod.id,
+      financeCategoryId: salariesCategory.id,
+    },
   });
 
   console.log('Seed concluído com sucesso!');

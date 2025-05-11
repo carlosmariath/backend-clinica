@@ -11,6 +11,8 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
 import { ServiceModule } from './service/service.module';
 import { BranchModule } from './branch/branch.module';
+import { TherapyPlansModule } from './therapy-plans/therapy-plans.module';
+import { FinanceModule } from './finance/finance.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { BranchModule } from './branch/branch.module';
     KnowledgeModule,
     ServiceModule,
     BranchModule,
+    TherapyPlansModule,
+    FinanceModule,
   ],
 })
 export class AppModule {}

@@ -22,6 +22,10 @@ model Branch {
   services          Service[]
   therapistBranches TherapistBranch[]
   users             User[]
+  plans             TherapyPlan[]     // Planos de terapia associados a esta filial
+  subscriptions     Subscription[]    // Subscrições associadas a esta filial
+  financialTransactions FinancialTransaction[] // Transações financeiras associadas a esta filial
+  sessionConsumptions SessionConsumption[] // Consumos de sessão nesta filial
 }
 
 model User {
@@ -36,6 +40,8 @@ model User {
   appointments Appointment[]
   ChatSession  ChatSession[]
   branch       Branch?       @relation(fields: [branchId], references: [id])
+  subscriptions Subscription[] // Subscrições de planos de terapia do usuário
+  financialTransactions FinancialTransaction[] // Transações financeiras do usuário
 }
 
 model Therapist {
@@ -75,19 +81,22 @@ model Schedule {
 }
 
 model Appointment {
-  id          String            @id @default(uuid())
-  clientId    String
-  therapistId String
-  date        DateTime
-  startTime   String
-  endTime     String
-  status      AppointmentStatus @default(PENDING)
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
-  branchId    String?
-  branch      Branch?           @relation(fields: [branchId], references: [id])
-  client      User              @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  therapist   Therapist         @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  id           String            @id @default(uuid())
+  clientId     String
+  therapistId  String
+  date         DateTime
+  startTime    String
+  endTime      String
+  status       AppointmentStatus @default(PENDING)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  branchId     String?
+  notes        String?           // Observações do agendamento
+  noShowFee    Float?            // Taxa por não comparecimento (no-show)
+  branch       Branch?           @relation(fields: [branchId], references: [id])
+  client       User              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  therapist    Therapist         @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  consumption  SessionConsumption? // Relação com o consumo de sessão
 }
 
 model ChatSession {
@@ -153,6 +162,106 @@ model TherapistService {
   therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
 }
 
+// ======================= NOVOS MODELOS =======================
+
+// Plano de Terapia
+model TherapyPlan {
+  id            String         @id @default(uuid())
+  name          String         // Nome do plano (ex: "Plano Básico", "Plano Premium")
+  description   String?        // Descrição detalhada do plano
+  totalSessions Int            // Número total de sessões incluídas no plano
+  totalPrice    Float          // Preço total do plano
+  validityDays  Int            // Período de validade em dias
+  isActive      Boolean        @default(true) // Se o plano está ativo para novas adesões
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  branchId      String?        // Opcional: associar a uma filial específica
+  branch        Branch?        @relation(fields: [branchId], references: [id])
+  subscriptions Subscription[] // Subscrições deste plano
+}
+
+// Subscrição de Plano
+model Subscription {
+  id              String              @id @default(uuid())
+  planId          String              // Plano contratado
+  clientId        String              // Cliente que adquiriu
+  branchId        String?             // Filial (opcional)
+  status          SubscriptionStatus  @default(PENDING) // Status da subscrição
+  token           String              @unique // Token para aceite
+  tokenExpiresAt  DateTime            // Data de expiração do token
+  acceptedAt      DateTime?           // Data em que o cliente aceitou
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  sessionsLeft    Int                 // Contador de sessões restantes
+  validUntil      DateTime?           // Data de validade (calculada a partir do aceite)
+  plan            TherapyPlan         @relation(fields: [planId], references: [id])
+  client          User                @relation(fields: [clientId], references: [id])
+  branch          Branch?             @relation(fields: [branchId], references: [id])
+  consumptions    SessionConsumption[] // Consumos de sessão associados a esta subscrição
+  cancellationReason String?          // Motivo do cancelamento, se houver
+}
+
+// Consumo de Sessão
+model SessionConsumption {
+  id              String    @id @default(uuid())
+  subscriptionId  String    // Subscrição associada
+  appointmentId   String    @unique // Agendamento que consumiu a sessão
+  branchId        String    // Filial onde a sessão foi consumida
+  consumedAt      DateTime  @default(now()) // Data/hora do consumo
+  wasRefunded     Boolean   @default(false) // Se a sessão foi estornada
+  refundReason    String?   // Motivo do estorno, se houver
+  createdAt       DateTime  @default(now())
+  subscription    Subscription @relation(fields: [subscriptionId], references: [id])
+  appointment     Appointment  @relation(fields: [appointmentId], references: [id])
+  branch          Branch       @relation(fields: [branchId], references: [id])
+}
+
+// Transação Financeira
+model FinancialTransaction {
+  id              String              @id @default(uuid())
+  type            TransactionType     // Tipo de transação (receita ou despesa)
+  amount          Float               // Valor da transação
+  description     String              // Descrição da transação
+  category        String              // Categoria (ex: "Venda de Plano", "No-show", "Operacional")
+  date            DateTime            // Data da transação
+  clientId        String?             // Cliente associado (opcional)
+  branchId        String?             // Filial associada (opcional)
+  reference       String?             // Referência a outros objetos (ex: ID de subscription, appointment)
+  referenceType   String?             // Tipo de referência (ex: "subscription", "appointment")
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  paymentMethod   PaymentMethod?      @relation(fields: [paymentMethodId], references: [id])
+  paymentMethodId String?
+  client          User?               @relation(fields: [clientId], references: [id])
+  branch          Branch?             @relation(fields: [branchId], references: [id])
+  financeCategory FinanceCategory?    @relation(fields: [financeCategoryId], references: [id])
+  financeCategoryId String?
+}
+
+// Categoria Financeira
+model FinanceCategory {
+  id           String                @id @default(uuid())
+  name         String                @unique // Nome da categoria
+  type         TransactionType       // Se é categoria de receita ou despesa
+  description  String?               // Descrição da categoria
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  transactions FinancialTransaction[]
+}
+
+// Método de Pagamento
+model PaymentMethod {
+  id           String                @id @default(uuid())
+  name         String                @unique // Nome do método (ex: "Cartão de Crédito", "PIX")
+  description  String?               // Descrição adicional
+  isActive     Boolean               @default(true) // Se está ativo para uso
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+  transactions FinancialTransaction[]
+}
+
+// ======================= ENUMS =======================
+
 enum Role {
   ADMIN
   THERAPIST
@@ -165,4 +274,18 @@ enum AppointmentStatus {
   CONFIRMED
   CANCELED
   COMPLETED
+  NO_SHOW // Novo status: cliente não compareceu
+}
+
+enum SubscriptionStatus {
+  PENDING    // Aguardando aceite do cliente
+  ACTIVE     // Cliente aceitou e plano está ativo
+  COMPLETED  // Todas as sessões foram utilizadas
+  EXPIRED    // Prazo de validade expirou
+  CANCELED   // Cancelado manualmente
+}
+
+enum TransactionType {
+  REVENUE    // Receita
+  EXPENSE    // Despesa
 }

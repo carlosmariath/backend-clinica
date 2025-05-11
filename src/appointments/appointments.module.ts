@@ -1,18 +1,14 @@
 import { Module } from '@nestjs/common';
-import { PrismaModule } from '../prisma/prisma.module';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
-import { JwtModule } from '@nestjs/jwt';
 import { AppointmentsService } from './appointments.service';
 import { AppointmentsController } from './appointments.controller';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuthModule } from '../auth/auth.module';
+import { TherapyPlansModule } from '../therapy-plans/therapy-plans.module';
 
 @Module({
-  imports: [
-    PrismaModule,
-    JwtModule.register({ secret: process.env.JWT_SECRET }),
-  ],
-  providers: [AppointmentsService, JwtAuthGuard, RolesGuard],
+  imports: [AuthModule, TherapyPlansModule],
   controllers: [AppointmentsController],
+  providers: [AppointmentsService, PrismaService],
   exports: [AppointmentsService],
 })
 export class AppointmentsModule {}

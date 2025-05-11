@@ -258,9 +258,12 @@ export class WhatsappService {
       therapistId,
       month,
     });
-    const availableDates = availableDatesObj
+    
+    // Corrigir acesso ao objeto retornado, que tem uma propriedade 'dates'
+    const availableDates = availableDatesObj.dates
       .filter((d) => d.available)
       .map((d) => d.date);
+      
     const message =
       'Aqui estão as datas disponíveis para agendamento:\n' +
       availableDates.map((date) => `📅 ${date}`).join('\n');
@@ -273,13 +276,19 @@ export class WhatsappService {
     const therapist = await this.therapistsService.listTherapists();
     const therapistId = therapist[0]?.id;
     const serviceId = therapist[0]?.therapistServices?.[0]?.service?.id;
-    const availableTimes = await this.appointmentsService.getAvailableSlots({
+    const availableTimesObj = await this.appointmentsService.getAvailableSlots({
       services: serviceId,
       therapistId,
       date,
     });
+    
+    // Corrigir acesso ao objeto retornado, que tem uma propriedade 'slots'
+    const availableTimes = availableTimesObj.slots
+      .filter(slot => slot.available)
+      .map(slot => slot.time);
+      
     const message =
-      `Aqui estão os horários disponíveis para ${date}:\n` +
+      'Aqui estão os horários disponíveis para a data selecionada:\n' +
       availableTimes.map((time) => `🕒 ${time}`).join('\n');
     await this.sendMessage(phoneNumber, message);
     return availableTimes;

@@ -136,6 +136,23 @@ export class AppointmentsService {
     });
   }
 
+  async cancelAppointment(appointmentId: string, userId: string) {
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+    });
+
+    if (!appointment)
+      throw new NotFoundException('Agendamento não encontrado.');
+
+    if (appointment.clientId !== userId && appointment.therapistId !== userId) {
+      throw new BadRequestException('Você não pode cancelar este agendamento.');
+    }
+
+    return this.prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status: 'CANCELED' },
+    });
+  }
   async getAvailableDates({
     services,
     therapistId,
@@ -147,30 +164,95 @@ export class AppointmentsService {
     month: string;
     branchId?: string;
   }) {
-    // Implementação simples para retornar uma array de datas disponíveis
-    const [year, monthNum] = month.split('-').map(Number);
+    // services: string separado por vírgula
+    // month: YYYY-MM
+    // Retorna [{ date: string, available: boolean, slots: string[] }]
+    if (!therapistId || !services) return [];
+    const [year, monthNum] = month
+      ? month.split('-').map(Number)
+      : [new Date().getFullYear(), new Date().getMonth() + 1];
+    const daysInMonth = new Date(year, monthNum, 0).getDate();
+    const results: { date: string; available: boolean; slots: string[] }[] = [];
 
-    const startDate = new Date(year, monthNum - 1, 1);
-    const endDate = new Date(year, monthNum, 0); // Último dia do mês
+    // Otimização: buscar todos os dias da semana disponíveis do terapeuta de uma vez
+    const schedules = await this.prisma.schedule.findMany({
+      where: { therapistId },
+      select: { dayOfWeek: true, startTime: true, endTime: true },
+    });
+    const availableDaysOfWeek = schedules.map((s) => s.dayOfWeek);
 
-    const dates: Date[] = [];
-    for (
-      let d = new Date(startDate);
-      d <= endDate;
-      d.setDate(d.getDate() + 1)
-    ) {
-      // Considerar apenas dias úteis (não domingos)
-      if (d.getDay() !== 0) {
-        dates.push(new Date(d));
-      }
-    }
+    // Buscar todos os agendamentos do mês de uma vez
+    const monthStr = String(monthNum).padStart(2, '0');
 
-    return {
-      dates: dates.map((date) => ({
-        date: date.toISOString().split('T')[0],
-        available: true,
-      })),
+    // Adicionar filtro por filial se fornecido
+    const where: any = {
+      therapistId,
+      date: {
+        gte: new Date(`${year}-${monthStr}-01`),
+        lte: new Date(`${year}-${monthStr}-${daysInMonth}`),
+      },
     };
+
+    if (branchId) where.branchId = branchId;
+
+    const appointments = await this.prisma.appointment.findMany({
+      where,
+      select: { date: true, startTime: true },
+    });
+
+    // Buscar a duração média do serviço selecionado (assumindo apenas um serviço)
+    const serviceId = services.split(',')[0];
+
+    // Adicionar filtro por filial se fornecido
+    const serviceWhere: any = { id: serviceId };
+    if (branchId) serviceWhere.branchId = branchId;
+
+    const service: { averageDuration: number } | null =
+      await this.prisma.service.findFirst({
+        where: serviceWhere,
+        select: { averageDuration: true },
+      });
+    const duration: number =
+      service && typeof service.averageDuration === 'number'
+        ? service.averageDuration
+        : 30;
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateObj = new Date(Date.UTC(year, monthNum - 1, day));
+      const dayOfWeek = dateObj.getUTCDay();
+      const dateStr = dateObj.toISOString().split('T')[0];
+      if (!availableDaysOfWeek.includes(dayOfWeek)) {
+        results.push({ date: dateStr, available: false, slots: [] });
+        continue;
+      }
+      // Pega o schedule do terapeuta para esse dia da semana
+      const schedule = schedules.find((s) => s.dayOfWeek === dayOfWeek);
+      if (!schedule) {
+        results.push({ date: dateStr, available: false, slots: [] });
+        continue;
+      }
+      // Gera horários possíveis para o dia usando a duração média do serviço
+      const [startHour, startMin] = schedule.startTime.split(':').map(Number);
+      const [endHour, endMin] = schedule.endTime.split(':').map(Number);
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      const slots: string[] = [];
+      for (let m = startMinutes; m + duration <= endMinutes; m += duration) {
+        const hour = String(Math.floor(m / 60)).padStart(2, '0');
+        const min = String(m % 60).padStart(2, '0');
+        slots.push(`${hour}:${min}`);
+      }
+      // Filtra agendamentos desse dia
+      const booked = appointments
+        .filter((a) => a.date.toISOString().split('T')[0] === dateStr)
+        .map((a) => a.startTime);
+      // Slots livres
+      const freeSlots = slots.filter((slot) => !booked.includes(slot));
+      // Se sobrar algum slot livre, o dia está disponível
+      const hasFreeSlot = freeSlots.length > 0;
+      results.push({ date: dateStr, available: hasFreeSlot, slots: freeSlots });
+    }
+    return results;
   }
 
   async getAvailableSlots({
@@ -184,26 +266,60 @@ export class AppointmentsService {
     date: string;
     branchId?: string;
   }) {
-    // Implementação simples para retornar slots disponíveis
-    // Na prática, verificaria agendamentos existentes e disponibilidade do terapeuta
-    const timeSlots = [
-      '08:00',
-      '09:00',
-      '10:00',
-      '11:00',
-      '13:00',
-      '14:00',
-      '15:00',
-      '16:00',
-      '17:00',
-    ];
+    // Retorna array de horários disponíveis para o terapeuta e serviço na data
+    if (!therapistId || !services || !date) return [];
+    const [year, month, day] = date.split('-').map(Number);
+    const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    const schedule = await this.prisma.schedule.findFirst({
+      where: { therapistId, dayOfWeek },
+    });
+    if (!schedule) return [];
 
-    return {
-      slots: timeSlots.map((time) => ({
-        time,
-        available: true,
-      })),
+    // Buscar a duração média do serviço selecionado (assumindo apenas um serviço)
+    const serviceId = services.split(',')[0];
+
+    // Adicionar filtro por filial se fornecido
+    const serviceWhere: any = { id: serviceId };
+    if (branchId) {
+      serviceWhere.branchId = branchId;
+    }
+
+    const service = await this.prisma.service.findFirst({
+      where: serviceWhere,
+      select: { averageDuration: true },
+    });
+
+    const duration: number =
+      service && typeof service.averageDuration === 'number'
+        ? service.averageDuration
+        : 30;
+
+    // Gera horários de acordo com a duração do serviço
+    const [startHour, startMin] = schedule.startTime.split(':').map(Number);
+    const [endHour, endMin] = schedule.endTime.split(':').map(Number);
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    const slots: string[] = [];
+    for (let m = startMinutes; m + duration <= endMinutes; m += duration) {
+      const hour = String(Math.floor(m / 60)).padStart(2, '0');
+      const min = String(m % 60).padStart(2, '0');
+      slots.push(`${hour}:${min}`);
+    }
+    // Remove horários já ocupados
+    const appointmentWhere: any = {
+      therapistId,
+      date: new Date(date),
     };
+
+    if (branchId) {
+      appointmentWhere.branchId = branchId;
+    }
+
+    const appointments = await this.prisma.appointment.findMany({
+      where: appointmentWhere,
+    });
+    const booked = appointments.map((a) => a.startTime);
+    return slots.filter((slot) => !booked.includes(slot));
   }
 
   async getAvailableTimes(
@@ -310,11 +426,9 @@ export class AppointmentsService {
     return this.prisma.appointment.findMany({
       where,
       include: {
-        client: true,
         therapist: true,
-      },
-      orderBy: {
-        date: 'asc',
+        client: true,
+        branch: true,
       },
     });
   }
@@ -403,8 +517,7 @@ export class AppointmentsService {
 
     // Tentar consumir uma sessão do plano do cliente
     try {
-      const consumptionResult =
-        await this.sessionConsumptionService.consumeSession(id);
+      const consumptionResult = await this.sessionConsumptionService.consumeSession(id);
       return {
         appointment: updatedAppointment,
         consumptionResult,
@@ -414,8 +527,7 @@ export class AppointmentsService {
       // Se não for possível consumir, apenas confirmar o agendamento sem consumo
       return {
         appointment: updatedAppointment,
-        message:
-          'Agendamento confirmado sem consumo de sessão: ' + error.message,
+        message: 'Agendamento confirmado sem consumo de sessão: ' + error.message,
       };
     }
   }
@@ -435,23 +547,20 @@ export class AppointmentsService {
     }
 
     if (appointment.status === AppointmentStatus.COMPLETED) {
-      throw new BadRequestException(
-        'Não é possível cancelar um agendamento já realizado',
-      );
+      throw new BadRequestException('Não é possível cancelar um agendamento já realizado');
     }
 
     // Verificar se há consumo de sessão associado a este agendamento
     // e aplicar as regras de cancelamento
     try {
-      const cancellationResult =
-        await this.sessionConsumptionService.handleCancelation(
-          id,
-          applyNoShowFee,
-        );
-
+      const cancellationResult = await this.sessionConsumptionService.handleCancelation(
+        id, 
+        applyNoShowFee
+      );
+      
       // O método handleCancelation já atualiza o status para CANCELED ou NO_SHOW
       // quando necessário, então não precisamos fazer a atualização aqui
-
+      
       return {
         message: 'Agendamento cancelado com sucesso',
         cancellationResult,
@@ -463,21 +572,19 @@ export class AppointmentsService {
         where: { id },
         data: { status: AppointmentStatus.CANCELED },
       });
-
+      
       return {
         appointment: updatedAppointment,
-        message:
-          'Agendamento cancelado sem processamento de consumo: ' +
-          error.message,
+        message: 'Agendamento cancelado sem processamento de consumo: ' + error.message,
       };
     }
   }
 
   async rescheduleAppointment(
-    id: string,
-    newDate: string,
-    newStartTime: string,
-    newEndTime: string,
+    id: string, 
+    newDate: string, 
+    newStartTime: string, 
+    newEndTime: string
   ) {
     // Verificar se o agendamento existe
     const appointment = await this.prisma.appointment.findUnique({
@@ -494,25 +601,22 @@ export class AppointmentsService {
       new Date(newDate),
       newStartTime,
       newEndTime,
-      appointment.id, // Ignorar o próprio agendamento na verificação
+      appointment.id // Ignorar o próprio agendamento na verificação
     );
 
     if (!isAvailable) {
-      throw new BadRequestException(
-        'O horário selecionado não está disponível',
-      );
+      throw new BadRequestException('O horário selecionado não está disponível');
     }
 
     // Se houver consumo de sessão associado, usar o serviço de consumo para reagendar
     try {
-      const reschedulingResult =
-        await this.sessionConsumptionService.rescheduleAppointment(
-          id,
-          new Date(newDate),
-          newStartTime,
-          newEndTime,
-        );
-
+      const reschedulingResult = await this.sessionConsumptionService.rescheduleAppointment(
+        id,
+        new Date(newDate),
+        newStartTime,
+        newEndTime
+      );
+      
       return {
         message: 'Agendamento remarcado com sucesso',
         reschedulingResult,
@@ -529,22 +633,20 @@ export class AppointmentsService {
           status: AppointmentStatus.PENDING, // Voltar para PENDING quando reagendado
         },
       });
-
+      
       return {
         appointment: updatedAppointment,
-        message:
-          'Agendamento remarcado sem processamento de consumo: ' +
-          error.message,
+        message: 'Agendamento remarcado sem processamento de consumo: ' + error.message,
       };
     }
   }
-
+  
   private async checkAvailability(
     therapistId: string,
     date: Date,
     startTime: string,
     endTime: string,
-    excludeAppointmentId?: string,
+    excludeAppointmentId?: string
   ): Promise<boolean> {
     // Montar filtro para buscar agendamentos conflitantes
     const where: any = {
@@ -579,17 +681,17 @@ export class AppointmentsService {
         },
       ],
     };
-
+    
     // Se estamos modificando um agendamento existente, excluí-lo da verificação
     if (excludeAppointmentId) {
       where.id = {
         not: excludeAppointmentId,
       };
     }
-
+    
     // Contar agendamentos conflitantes
     const conflictCount = await this.prisma.appointment.count({ where });
-
+    
     // Se não houver conflitos, o horário está disponível
     return conflictCount === 0;
   }
