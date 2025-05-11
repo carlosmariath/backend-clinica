@@ -6,12 +6,29 @@ import { JwtAuthGuard } from './jwt-auth.guard';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private authService: AuthService, private usersService: UsersService) {}
+  constructor(
+    private authService: AuthService,
+    private usersService: UsersService,
+  ) {}
 
   @Post('register')
-  async register(@Body() body: { name: string; email: string; password: string; role: Role, phone: string }) {
-    
-    return this.usersService.createUser(body.name, body.email, body.password, body.role, body.phone);
+  async register(
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      password: string;
+      role: Role;
+      phone: string;
+    },
+  ) {
+    return this.usersService.createUser(
+      body.name,
+      body.email,
+      body.password,
+      body.role,
+      body.phone,
+    );
   }
 
   @Post('login')
@@ -19,10 +36,10 @@ export class AuthController {
     const user = await this.authService.validateUser(body.email, body.password);
     return this.authService.login(user);
   }
-   // 🔹 Protegendo a rota com o JwtAuthGuard
-   @UseGuards(JwtAuthGuard)
-   @Get('me')
-   async getProfile(@Req() req) {
-     return req.user; // Retorna os dados do usuário autenticado
-   }
+  // 🔹 Protegendo a rota com o JwtAuthGuard
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async getProfile(@Req() req) {
+    return req.user; // Retorna os dados do usuário autenticado
+  }
 }

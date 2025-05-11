@@ -20,7 +20,7 @@ export class ChatService {
     await this.prisma.chatSession.deleteMany({
       where: { phoneNumber },
     });
-    
+
     return this.prisma.chatSession.create({
       data: {
         userId,

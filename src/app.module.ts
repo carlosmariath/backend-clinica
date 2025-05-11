@@ -9,20 +9,23 @@ import { ConfigModule } from '@nestjs/config';
 import { ChatModule } from './chat/chat.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
+import { ServiceModule } from './service/service.module';
+import { BranchModule } from './branch/branch.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }), 
-    PrismaModule, 
-    UsersModule, 
-    AuthModule, 
-    TherapistsModule, 
-    AppointmentsModule, 
-    WhatsappModule, 
-    ChatModule, 
-    DashboardModule, 
-    KnowledgeModule
+    ConfigModule.forRoot({ isGlobal: true }),
+    PrismaModule,
+    UsersModule,
+    AuthModule,
+    TherapistsModule,
+    AppointmentsModule,
+    WhatsappModule,
+    ChatModule,
+    DashboardModule,
+    KnowledgeModule,
+    ServiceModule,
+    BranchModule,
   ],
 })
-export class AppModule { }
-
+export class AppModule {}

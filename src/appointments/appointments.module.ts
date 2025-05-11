@@ -7,10 +7,12 @@ import { AppointmentsService } from './appointments.service';
 import { AppointmentsController } from './appointments.controller';
 
 @Module({
-   imports: [PrismaModule, JwtModule.register({ secret: process.env.JWT_SECRET })],
-    providers: [AppointmentsService, JwtAuthGuard, RolesGuard],
-    controllers: [AppointmentsController],
-    exports: [AppointmentsService],
+  imports: [
+    PrismaModule,
+    JwtModule.register({ secret: process.env.JWT_SECRET }),
+  ],
+  providers: [AppointmentsService, JwtAuthGuard, RolesGuard],
+  controllers: [AppointmentsController],
+  exports: [AppointmentsService],
 })
 export class AppointmentsModule {}
-

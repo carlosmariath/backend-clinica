@@ -1,15 +1,25 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, UseGuards } from "@nestjs/common";
-import { KnowledgeService } from "./knowledge.service";
-import { JwtAuthGuard } from "../auth/jwt-auth.guard";
-import { RolesGuard } from "../auth/roles.guard";
-import { Roles } from "../auth/roles.decorator";
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { KnowledgeService } from './knowledge.service';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard } from '../auth/roles.guard';
+import { Roles } from '../auth/roles.decorator';
 
-@Controller("knowledge")
+@Controller('knowledge')
 export class KnowledgeController {
   constructor(private knowledgeService: KnowledgeService) {}
 
   // Endpoints para usuários autenticados (administradores)
-  
+
   @Get()
   @UseGuards(JwtAuthGuard)
   //@Roles('ADMIN')
@@ -19,7 +29,7 @@ export class KnowledgeController {
     @Query('skip') skip?: number,
     @Query('take') take?: number,
     @Query('orderBy') orderBy?: string,
-    @Query('orderDirection') orderDirection?: 'asc' | 'desc'
+    @Query('orderDirection') orderDirection?: 'asc' | 'desc',
   ) {
     return this.knowledgeService.getAllEntries({
       categoryId,
@@ -27,20 +37,23 @@ export class KnowledgeController {
       skip: skip ? Number(skip) : undefined,
       take: take ? Number(take) : undefined,
       orderBy,
-      orderDirection
+      orderDirection,
     });
   }
 
   @Post()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
-  async addEntry(@Body() body: { 
-    question: string; 
-    answer: string; 
-    categoryId?: string;
-    tags?: string[];
-    createdBy?: string;
-  }) {
+  async addEntry(
+    @Body()
+    body: {
+      question: string;
+      answer: string;
+      categoryId?: string;
+      tags?: string[];
+      createdBy?: string;
+    },
+  ) {
     return this.knowledgeService.addEntry(body);
   }
 
@@ -48,18 +61,19 @@ export class KnowledgeController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   async updateEntry(
-    @Param('id') id: string, 
-    @Body() body: { 
-      question?: string; 
+    @Param('id') id: string,
+    @Body()
+    body: {
+      question?: string;
       answer?: string;
       categoryId?: string;
       tags?: string[];
       enabled?: boolean;
-    }
+    },
   ) {
     return this.knowledgeService.updateEntry({
       id,
-      ...body
+      ...body,
     });
   }
 
@@ -91,7 +105,7 @@ export class KnowledgeController {
   @Roles('ADMIN')
   async updateCategory(
     @Param('id') id: string,
-    @Body() body: { name?: string; description?: string }
+    @Body() body: { name?: string; description?: string },
   ) {
     return this.knowledgeService.updateCategory(id, body);
   }
@@ -111,12 +125,12 @@ export class KnowledgeController {
   async getFrequentQuestions(
     @Query('withoutAnswer') withoutAnswer?: string,
     @Query('minCount') minCount?: number,
-    @Query('limit') limit?: number
+    @Query('limit') limit?: number,
   ) {
     return this.knowledgeService.getFrequentQuestions({
       withoutAnswer: withoutAnswer === 'true',
       minCount: minCount ? Number(minCount) : undefined,
-      limit: limit ? Number(limit) : undefined
+      limit: limit ? Number(limit) : undefined,
     });
   }
 
@@ -125,12 +139,12 @@ export class KnowledgeController {
   @Roles('ADMIN')
   async convertFrequentQuestion(
     @Param('id') id: string,
-    @Body() body: { answer: string; categoryId?: string }
+    @Body() body: { answer: string; categoryId?: string },
   ) {
     return this.knowledgeService.convertFrequentQuestionToKnowledge(
       id,
       body.answer,
-      body.categoryId
+      body.categoryId,
     );
   }
 

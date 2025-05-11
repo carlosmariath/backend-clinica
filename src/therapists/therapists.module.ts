@@ -7,7 +7,10 @@ import { RolesGuard } from '../auth/roles.guard';
 import { JwtModule } from '@nestjs/jwt';
 
 @Module({
-  imports: [PrismaModule, JwtModule.register({ secret: process.env.JWT_SECRET })],
+  imports: [
+    PrismaModule,
+    JwtModule.register({ secret: process.env.JWT_SECRET }),
+  ],
   providers: [TherapistsService, JwtAuthGuard, RolesGuard],
   controllers: [TherapistsController],
   exports: [TherapistsService],

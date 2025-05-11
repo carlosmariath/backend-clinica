@@ -7,10 +7,33 @@ import { Role } from '@prisma/client';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async createUser(name: string, email: string, password: string, role: Role, phone: string) {
+  async createUser(
+    name: string,
+    email: string,
+    password: string,
+    role: Role,
+    phone: string,
+    branchId?: string,
+  ) {
     const hashedPassword = await bcrypt.hash(password, 10);
     return this.prisma.user.create({
-      data: { name, email, password: hashedPassword, role, phone },
+      data: { 
+        name, 
+        email, 
+        password: hashedPassword, 
+        role, 
+        phone, 
+        branchId 
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        phone: true,
+        branchId: true,
+        createdAt: true
+      }
     });
   }
 
@@ -20,13 +43,90 @@ export class UsersService {
 
   async findByPhone(phone: string) {
     return this.prisma.user.findUnique({
-        where: { phone },
+      where: { phone },
     });
-}
-async findAllClients() {
-  return this.prisma.user.findMany({
-    where: { role: 'CLIENT' }, // 🔹 Assumindo que o campo role existe
-    select: { id: true, name: true, email: true, phone: true },
-  });
-}
+  }
+
+  async findAllClients() {
+    return this.prisma.user.findMany({
+      where: { role: 'CLIENT' },
+      select: { id: true, name: true, email: true, phone: true },
+    });
+  }
+
+  // Buscar todos os usuários administrativos (ADMIN e RECEPTIONIST)
+  async findAdminUsers() {
+    return this.prisma.user.findMany({
+      where: {
+        role: {
+          in: ['ADMIN', 'RECEPTIONIST'],
+        },
+      },
+      select: {
+        id: true,
+        name: true, 
+        email: true,
+        phone: true,
+        role: true,
+        branchId: true,
+        createdAt: true
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  // Buscar um único usuário por ID
+  async findById(id: string) {
+    return this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        branchId: true,
+      },
+    });
+  }
+
+  // Atualizar usuário
+  async updateUser(
+    id: string,
+    data: {
+      name?: string;
+      email?: string;
+      password?: string;
+      role?: Role;
+      phone?: string;
+      branchId?: string;
+    },
+  ) {
+    // Se uma senha foi fornecida, precisamos hashear antes de salvar
+    if (data.password) {
+      data.password = await bcrypt.hash(data.password, 10);
+    }
+
+    return this.prisma.user.update({
+      where: { id },
+      data,
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+        branchId: true,
+      },
+    });
+  }
+
+  // Excluir usuário
+  async deleteUser(id: string) {
+    return this.prisma.user.delete({
+      where: { id },
+    });
+  }
 }

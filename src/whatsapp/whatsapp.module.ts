@@ -10,7 +10,15 @@ import { ChatModule } from 'src/chat/chat.module';
 import { KnowledgeModule } from 'src/knowledge/knowledge.module';
 
 @Module({
-  imports: [HttpModule, ConfigModule, AppointmentsModule, TherapistsModule, UsersModule, ChatModule, KnowledgeModule],
+  imports: [
+    HttpModule,
+    ConfigModule,
+    AppointmentsModule,
+    TherapistsModule,
+    UsersModule,
+    ChatModule,
+    KnowledgeModule,
+  ],
   providers: [WhatsappService],
   controllers: [WhatsappController],
 })

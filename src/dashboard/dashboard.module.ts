@@ -8,7 +8,10 @@ import { PrismaModule } from 'src/prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 
 @Module({
-  imports: [PrismaModule, JwtModule.register({ secret: process.env.JWT_SECRET })],  
+  imports: [
+    PrismaModule,
+    JwtModule.register({ secret: process.env.JWT_SECRET }),
+  ],
   controllers: [DashboardController],
   providers: [DashboardService, PrismaService, JwtAuthGuard, RolesGuard],
   exports: [DashboardService],

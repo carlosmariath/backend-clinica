@@ -7,7 +7,10 @@ import { RolesGuard } from 'src/auth/roles.guard';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 @Module({
- imports: [PrismaModule, JwtModule.register({ secret: process.env.JWT_SECRET })],
+  imports: [
+    PrismaModule,
+    JwtModule.register({ secret: process.env.JWT_SECRET }),
+  ],
   providers: [UsersService, JwtAuthGuard, RolesGuard],
   controllers: [UsersController],
   exports: [UsersService], // 🔹 Importante: exporta UsersService

@@ -1,11 +1,6 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["interactiveTransactions"]
 }
 
 datasource db {
@@ -13,44 +8,70 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model Branch {
+  id                String            @id @default(uuid())
+  name              String
+  address           String
+  phone             String
+  email             String?
+  isActive          Boolean           @default(true)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  appointments      Appointment[]
+  schedules         Schedule[]
+  services          Service[]
+  therapistBranches TherapistBranch[]
+  users             User[]
+}
+
 model User {
   id           String        @id @default(uuid())
   name         String
   email        String        @unique
   password     String
-  phone        String        @unique
   role         Role          @default(CLIENT)
-  appointments Appointment[] // 🔹 Relação com agendamentos
   createdAt    DateTime      @default(now())
+  phone        String        @unique
+  branchId     String?
+  appointments Appointment[]
   ChatSession  ChatSession[]
-}
-
-enum Role {
-  ADMIN
-  THERAPIST
-  RECEPTIONIST
-  CLIENT
+  branch       Branch?       @relation(fields: [branchId], references: [id])
 }
 
 model Therapist {
-  id           String        @id @default(uuid())
-  name         String
-  email        String        @unique
-  phone        String
-  specialty    String
-  schedules    Schedule[] // 🔹 Relação com horários disponíveis
-  appointments Appointment[] // 🔹 Relação com agendamentos
-  createdAt    DateTime      @default(now())
+  id                String             @id @default(uuid())
+  name              String
+  email             String             @unique
+  phone             String
+  specialty         String
+  createdAt         DateTime           @default(now())
+  appointments      Appointment[]
+  schedules         Schedule[]
+  therapistBranches TherapistBranch[]
+  therapistServices TherapistService[]
+}
+
+model TherapistBranch {
+  id          String    @id @default(uuid())
+  therapistId String
+  branchId    String
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  branch      Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+
+  @@unique([therapistId, branchId])
 }
 
 model Schedule {
-  id          String @id @default(uuid())
+  id          String    @id @default(uuid())
   therapistId String
-  dayOfWeek   Int // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
-  startTime   String // Exemplo: "09:00"
-  endTime     String // Exemplo: "18:00"
-
-  therapist Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  dayOfWeek   Int
+  startTime   String
+  endTime     String
+  branchId    String
+  branch      Branch    @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
 }
 
 model Appointment {
@@ -61,9 +82,82 @@ model Appointment {
   startTime   String
   endTime     String
   status      AppointmentStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  branchId    String?
+  branch      Branch?           @relation(fields: [branchId], references: [id])
+  client      User              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  therapist   Therapist         @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+}
 
-  client    User      @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  therapist Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+model ChatSession {
+  id          String   @id @default(uuid())
+  userId      String
+  phoneNumber String   @unique
+  history     Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model KnowledgeBase {
+  id         String             @id @default(uuid())
+  question   String             @unique
+  answer     String
+  createdAt  DateTime           @default(now())
+  updatedAt  DateTime           @updatedAt
+  categoryId String?
+  createdBy  String?
+  enabled    Boolean            @default(true)
+  tags       String[]
+  viewCount  Int                @default(0)
+  questions  FrequentQuestion[]
+  category   KnowledgeCategory? @relation(fields: [categoryId], references: [id])
+}
+
+model KnowledgeCategory {
+  id               String          @id @default(uuid())
+  name             String          @unique
+  description      String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  knowledgeEntries KnowledgeBase[]
+}
+
+model FrequentQuestion {
+  id             String         @id @default(uuid())
+  question       String
+  count          Int            @default(1)
+  lastAskedAt    DateTime       @default(now())
+  knowledgeId    String?
+  autoDetected   Boolean        @default(true)
+  knowledgeEntry KnowledgeBase? @relation(fields: [knowledgeId], references: [id])
+}
+
+model Service {
+  id              String             @id @default(uuid())
+  name            String             @unique
+  description     String?
+  price           Float
+  averageDuration Int                @default(60)
+  branchId        String?
+  branch          Branch?            @relation(fields: [branchId], references: [id])
+  therapists      TherapistService[]
+}
+
+model TherapistService {
+  id          String    @id @default(uuid())
+  therapistId String
+  serviceId   String
+  service     Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  ADMIN
+  THERAPIST
+  RECEPTIONIST
+  CLIENT
 }
 
 enum AppointmentStatus {
@@ -71,52 +165,4 @@ enum AppointmentStatus {
   CONFIRMED
   CANCELED
   COMPLETED
-}
-
-model ChatSession {
-  id          String   @id @default(uuid())
-  userId      String // ID do usuário que está conversando
-  phoneNumber String   @unique
-  history     Json // Armazena o histórico da conversa
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-}
-
-model KnowledgeBase {
-  id         String   @id @default(uuid())
-  question   String   @unique
-  answer     String
-  categoryId String?
-  enabled    Boolean  @default(true)
-  tags       String[]
-  createdBy  String?  // ID do usuário admin que criou
-  viewCount  Int      @default(0)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  
-  category   KnowledgeCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
-  questions  FrequentQuestion[]
-}
-
-model KnowledgeCategory {
-  id          String          @id @default(uuid())
-  name        String          @unique
-  description String?
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  
-  knowledgeEntries KnowledgeBase[]
-}
-
-model FrequentQuestion {
-  id             String   @id @default(uuid())
-  question       String
-  count          Int      @default(1)
-  lastAskedAt    DateTime @default(now())
-  knowledgeId    String?
-  autoDetected   Boolean  @default(true)
-  
-  knowledgeEntry KnowledgeBase? @relation(fields: [knowledgeId], references: [id], onDelete: SetNull)
 }
