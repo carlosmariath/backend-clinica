@@ -10,6 +10,7 @@ import {
   Delete,
   Patch,
   Query,
+  BadRequestException,
 } from '@nestjs/common';
 import { AppointmentsService } from './appointments.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -42,12 +43,30 @@ export class AppointmentsController {
       clientId: string;
       therapistId: string;
       date: string;
-      startTime: string;
-      endTime: string;
+      startTime?: string;
+      endTime?: string;
       branchId?: string;
+      serviceId?: string;
+      autoSchedule?: boolean;
+      subscriptionId?: string;
+      couponCode?: string;
+      notes?: string;
     },
   ) {
     const branchId = body.branchId || req.user.branchId;
+
+    // Se autoSchedule for true, o serviço deve encontrar o próximo horário disponível
+    if (body.autoSchedule) {
+      // TODO: Implementar lógica de auto-agendamento
+      throw new BadRequestException('Auto-agendamento ainda não implementado');
+    }
+
+    // Validar que startTime e endTime estão presentes quando não é auto-agendamento
+    if (!body.startTime || !body.endTime) {
+      throw new BadRequestException(
+        'startTime e endTime são obrigatórios quando autoSchedule não está ativo',
+      );
+    }
 
     return this.appointmentsService.createAppointment(
       body.clientId,
@@ -84,8 +103,6 @@ export class AppointmentsController {
       effectiveBranchId,
     );
   }
-
-  @Post(':appointmentId/cancel')
 
   @Get()
   async listAppointments(

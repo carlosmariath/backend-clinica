@@ -1,6 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { Prisma } from '@prisma/client';
 import { differenceInHours } from 'date-fns';
 
 // Defina os enums explicitamente
@@ -40,7 +39,7 @@ export class SessionConsumptionService {
     }
 
     // Verificar se o agendamento já tem um consumo associado
-    const existingConsumption = await this.prisma.sessionConsumption.findUnique({
+    const existingConsumption = await this.prisma.subscriptionConsumption.findUnique({
       where: { appointmentId },
     });
 
@@ -53,13 +52,13 @@ export class SessionConsumptionService {
       where: {
         clientId: appointment.clientId,
         status: SubscriptionStatus.ACTIVE,
-        sessionsLeft: { gt: 0 },
+        remainingSessions: { gt: 0 },
       },
       orderBy: {
-        acceptedAt: 'asc',
+        startDate: 'asc',
       },
       include: {
-        plan: true,
+        therapyPlan: true,
       },
     });
 
@@ -75,7 +74,7 @@ export class SessionConsumptionService {
     // Usar transação para garantir atomicidade
     return this.prisma.$transaction(async (prisma) => {
       // Criar o consumo de sessão
-      const consumption = await prisma.sessionConsumption.create({
+      const consumption = await prisma.subscriptionConsumption.create({
         data: {
           subscriptionId: activeSubscription.id,
           appointmentId,
@@ -88,22 +87,22 @@ export class SessionConsumptionService {
       const updatedSubscription = await prisma.subscription.update({
         where: { id: activeSubscription.id },
         data: {
-          sessionsLeft: activeSubscription.sessionsLeft - 1,
+          remainingSessions: activeSubscription.remainingSessions - 1,
           // Se chegar a zero, mudar o status para COMPLETED
-          ...(activeSubscription.sessionsLeft === 1
+          ...(activeSubscription.remainingSessions === 1
             ? { status: SubscriptionStatus.COMPLETED }
             : {}),
         },
       });
 
       // Criar transação financeira para a sessão
-      const sessionPrice = activeSubscription.plan.totalPrice / activeSubscription.plan.totalSessions;
+      const sessionPrice = activeSubscription.therapyPlan.totalPrice / activeSubscription.therapyPlan.totalSessions;
       
       await prisma.financialTransaction.create({
         data: {
           type: 'REVENUE',
           amount: sessionPrice,
-          description: `Consumo de sessão - ${activeSubscription.plan.name}`,
+          description: `Consumo de sessão - ${activeSubscription.therapyPlan.name}`,
           category: 'SESSION_CONSUMPTION',
           date: new Date(),
           clientId: appointment.clientId,
@@ -198,7 +197,7 @@ export class SessionConsumptionService {
   // Estornar um consumo de sessão
   async refundConsumption(consumptionId: string, reason: string) {
     // Buscar o consumo
-    const consumption = await this.prisma.sessionConsumption.findUnique({
+    const consumption = await this.prisma.subscriptionConsumption.findUnique({
       where: { id: consumptionId },
       include: {
         subscription: true,
@@ -217,7 +216,7 @@ export class SessionConsumptionService {
     // Usar transação para garantir atomicidade
     return this.prisma.$transaction(async (prisma) => {
       // Marcar o consumo como estornado
-      await prisma.sessionConsumption.update({
+      await prisma.subscriptionConsumption.update({
         where: { id: consumptionId },
         data: {
           wasRefunded: true,
@@ -228,20 +227,20 @@ export class SessionConsumptionService {
       // Incrementar o contador de sessões restantes na subscrição
       const subscription = await prisma.subscription.findUnique({
         where: { id: consumption.subscriptionId },
-        include: { plan: true },
+        include: { therapyPlan: true },
       });
 
       // Verificar se a subscrição ainda está válida ou se já expirou
       const canRefundSession = subscription && (
         subscription.status === SubscriptionStatus.ACTIVE || 
-        (subscription.status === SubscriptionStatus.COMPLETED && subscription.sessionsLeft === 0)
+        (subscription.status === SubscriptionStatus.COMPLETED && subscription.remainingSessions === 0)
       );
 
       if (subscription && canRefundSession) {
         await prisma.subscription.update({
           where: { id: consumption.subscriptionId },
           data: {
-            sessionsLeft: { increment: 1 },
+            remainingSessions: { increment: 1 },
             // Se estiver COMPLETED, voltar para ACTIVE
             status: subscription && subscription.status === SubscriptionStatus.COMPLETED 
               ? SubscriptionStatus.ACTIVE 
@@ -257,8 +256,8 @@ export class SessionConsumptionService {
       });
 
       // Criar transação financeira de estorno
-      if (subscription && subscription.plan) {
-        const sessionPrice = subscription.plan.totalPrice / subscription.plan.totalSessions;
+      if (subscription && subscription.therapyPlan) {
+        const sessionPrice = subscription.therapyPlan.totalPrice / subscription.therapyPlan.totalSessions;
         
         await prisma.financialTransaction.create({
           data: {
@@ -278,8 +277,8 @@ export class SessionConsumptionService {
       return {
         message: 'Consumo estornado com sucesso',
         canRefundSession,
-        sessionPrice: subscription && subscription.plan 
-          ? subscription.plan.totalPrice / subscription.plan.totalSessions 
+        sessionPrice: subscription && subscription.therapyPlan 
+          ? subscription.therapyPlan.totalPrice / subscription.therapyPlan.totalSessions 
           : null,
       };
     });

@@ -370,7 +370,6 @@ async function main() {
       totalPrice: 760.00, // 4 sessões com desconto
       validityDays: 60, // 2 meses
       isActive: true,
-      branchId: defaultBranch.id,
     },
   });
   
@@ -382,7 +381,6 @@ async function main() {
       totalPrice: 1440.00, // 8 sessões com desconto
       validityDays: 90, // 3 meses
       isActive: true,
-      branchId: defaultBranch.id,
     },
   });
   
@@ -394,8 +392,20 @@ async function main() {
       totalPrice: 2040.00, // 12 sessões com desconto maior
       validityDays: 120, // 4 meses
       isActive: true,
-      branchId: defaultBranch.id,
     },
+  });
+
+  // Associar planos às filiais
+  console.log('Associando planos às filiais...');
+  
+  // Todos os planos estão disponíveis na filial padrão
+  await prisma.therapyPlanBranch.createMany({
+    data: [
+      { therapyPlanId: basicPlan.id, branchId: defaultBranch.id },
+      { therapyPlanId: standardPlan.id, branchId: defaultBranch.id },
+      { therapyPlanId: premiumPlan.id, branchId: defaultBranch.id }
+    ],
+    skipDuplicates: true,
   });
 
   console.log('Criando uma assinatura de exemplo para o cliente...');
@@ -403,15 +413,14 @@ async function main() {
   // Criar uma assinatura de plano para o cliente
   const subscription = await prisma.subscription.create({
     data: {
-      planId: standardPlan.id,
+      therapyPlanId: standardPlan.id,
       clientId: client.id,
       branchId: defaultBranch.id,
       status: 'ACTIVE',
-      token: 'token-exemplo-12345',
-      tokenExpiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 dias no futuro
-      acceptedAt: new Date(),
-      sessionsLeft: 8, // Começa com todas as sessões do plano
-      validUntil: new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // 90 dias no futuro
+      startDate: new Date(),
+      endDate: new Date(Date.now() + standardPlan.validityDays * 24 * 60 * 60 * 1000),
+      totalSessions: standardPlan.totalSessions,
+      remainingSessions: standardPlan.totalSessions,
     },
   });
 

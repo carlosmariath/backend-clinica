@@ -382,12 +382,17 @@ export class WhatsappService {
     date: string,
     time: string,
   ) {
+    // Calcular o horário de término (adicionando 60 minutos ao horário de início)
+    const [hours, minutes] = time.split(':').map(Number);
+    const endHours = hours + 1; // Adiciona 1 hora
+    const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+
     await this.appointmentsService.createAppointment(
       clientId,
       therapistId,
       date,
       time,
-      time,
+      endTime,
     );
 
     return this.sendMessage(

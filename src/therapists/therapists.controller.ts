@@ -168,6 +168,29 @@ export class TherapistsController {
     );
   }
 
+  // 🔹 Buscar todos os horários do terapeuta em todas as filiais (para o próprio terapeuta)
+  @UseGuards(JwtAuthGuard)
+  @Get('me/schedules/all')
+  async getMyAllSchedules(@Req() req) {
+    return this.therapistsService.getAllSchedules(req.user.sub);
+  }
+
+  // 🔹 Buscar todos os horários de um terapeuta específico em todas as filiais (para admins ou o próprio terapeuta)
+  @UseGuards(JwtAuthGuard)
+  @Get(':therapistId/schedules/all')
+  async getAllTherapistSchedules(
+    @Req() req,
+    @Param('therapistId') therapistId: string,
+  ) {
+    // Verificar se é admin ou o próprio terapeuta
+    if (req.user.role !== 'ADMIN' && req.user.sub !== therapistId) {
+      throw new ForbiddenException(
+        'Você só pode visualizar seus próprios horários.',
+      );
+    }
+    return this.therapistsService.getAllSchedules(therapistId);
+  }
+
   // 🔹 Atualizar dados do terapeuta (ADMIN ou o próprio terapeuta)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Patch(':therapistId')

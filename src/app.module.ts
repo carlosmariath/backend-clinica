@@ -13,6 +13,7 @@ import { ServiceModule } from './service/service.module';
 import { BranchModule } from './branch/branch.module';
 import { TherapyPlansModule } from './therapy-plans/therapy-plans.module';
 import { FinanceModule } from './finance/finance.module';
+import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { FinanceModule } from './finance/finance.module';
     BranchModule,
     TherapyPlansModule,
     FinanceModule,
+    SubscriptionsModule,
   ],
 })
 export class AppModule {}

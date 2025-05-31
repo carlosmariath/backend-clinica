@@ -37,6 +37,33 @@ export class UsersService {
     });
   }
 
+  // Criar um novo cliente (usuário com role CLIENT)
+  async createClient(
+    name: string,
+    email: string,
+    phone?: string,
+  ) {
+    // Gerar uma senha aleatória temporária que o cliente pode alterar depois
+    const temporaryPassword = Math.random().toString(36).slice(-8);
+    const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+    
+    return this.prisma.user.create({
+      data: { 
+        name, 
+        email, 
+        password: hashedPassword, 
+        role: 'CLIENT', 
+        phone: phone || ''  // Garantir que phone seja sempre string
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true
+      }
+    });
+  }
+
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({ where: { email } });
   }

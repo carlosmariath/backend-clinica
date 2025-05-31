@@ -15,6 +15,23 @@ export class UsersController {
     return this.usersService.findAllClients();
   }
 
+  // 🔹 Endpoint para criar um novo cliente
+  @Post('clients')
+  async createClient(
+    @Body()
+    body: {
+      name: string;
+      email: string;
+      phone?: string;
+    },
+  ) {
+    return this.usersService.createClient(
+      body.name,
+      body.email,
+      body.phone
+    );
+  }
+
   // 🔹 Endpoint para listar apenas usuários administrativos (ADMIN e RECEPTIONIST)
   @Get('admin')
   @UseGuards(RolesGuard)

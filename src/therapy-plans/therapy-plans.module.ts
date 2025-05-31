@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
-import { TherapyPlansService } from './therapy-plans.service';
-import { TherapyPlansController } from './therapy-plans.controller';
-import { PrismaService } from '../prisma/prisma.service';
-import { AuthModule } from '../auth/auth.module';
+import { TherapyPlanService } from './services/therapy-plan.service';
+import { TherapyPlansService } from './services/therapy-plans.service';
+import { TherapyPlansController } from './controllers/therapy-plans.controller';
+import { PrismaModule } from '../prisma/prisma.module';
 import { SessionConsumptionService } from './session-consumption.service';
 
 @Module({
-  imports: [AuthModule],
+  imports: [PrismaModule],
   controllers: [TherapyPlansController],
-  providers: [TherapyPlansService, PrismaService, SessionConsumptionService],
-  exports: [TherapyPlansService, SessionConsumptionService],
+  providers: [TherapyPlanService, TherapyPlansService, SessionConsumptionService],
+  exports: [TherapyPlanService, TherapyPlansService, SessionConsumptionService]
 })
 export class TherapyPlansModule {}

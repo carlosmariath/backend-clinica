@@ -228,4 +228,13 @@ export class TherapistsService {
       },
     });
   }
+
+  // Buscar todos os horários de um terapeuta em todas as filiais
+  async getAllSchedules(therapistId: string) {
+    return this.prisma.schedule.findMany({
+      where: { therapistId },
+      include: { branch: true },
+      orderBy: [{ dayOfWeek: 'asc' }, { startTime: 'asc' }],
+    });
+  }
 }
