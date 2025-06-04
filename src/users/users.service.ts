@@ -74,11 +74,58 @@ export class UsersService {
     });
   }
 
-  async findAllClients() {
-    return this.prisma.user.findMany({
-      where: { role: 'CLIENT' },
-      select: { id: true, name: true, email: true, phone: true },
-    });
+  async findAllClients(page: number = 1, limit: number = 20) {
+    const skip = (page - 1) * limit;
+    
+    const [clients, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where: { role: 'CLIENT' },
+        select: { 
+          id: true, 
+          name: true, 
+          email: true, 
+          phone: true,
+          subscriptions: {
+            include: {
+              therapyPlan: {
+                select: {
+                  id: true,
+                  name: true,
+                  description: true,
+                  totalSessions: true,
+                  totalPrice: true,
+                  validityDays: true
+                }
+              }
+            },
+            where: {
+              status: {
+                in: ['ACTIVE', 'PENDING', 'EXPIRED']
+              }
+            },
+            orderBy: {
+              createdAt: 'desc'
+            }
+          }
+        },
+        orderBy: {
+          name: 'asc'
+        },
+        skip,
+        take: limit
+      }),
+      this.prisma.user.count({
+        where: { role: 'CLIENT' }
+      })
+    ]);
+
+    return {
+      data: clients,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   // Buscar todos os usuários administrativos (ADMIN e RECEPTIONIST)

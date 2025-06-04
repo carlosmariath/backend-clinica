@@ -14,17 +14,47 @@ export class AppointmentsService {
     private sessionConsumptionService: SessionConsumptionService,
   ) {}
 
-  async createAppointment(
-    clientId: string,
-    therapistId: string,
-    date: string,
-    startTime: string,
-    endTime: string,
-    branchId?: string,
-  ) {
+  // Função utilitária para converter string de data para Date sem problemas de timezone
+  private parseDateString(dateString: string): Date {
+    const [year, month, day] = dateString.split('-').map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  // Função utilitária para calcular o dia da semana corretamente
+  private getDayOfWeekFromDateString(dateString: string): number {
+    // Parse manual da data para evitar problemas de timezone
+    const [year, month, day] = dateString.split('-').map(Number);
+    
+    // Criar data em UTC meia-noite
+    const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // Meio-dia UTC para evitar edge cases
+    
+    // Aplicar offset do timezone de São Paulo (-3 horas)
+    const saoPauloOffset = -3 * 60; // -3 horas em minutos
+    const saoPauloDate = new Date(date.getTime() + saoPauloOffset * 60 * 1000);
+    
+    // Retorna 1-7 (Segunda-Domingo) - mesmo formato do therapists.service.ts
+    return saoPauloDate.getUTCDay() + 1 == 8 ? 0 : saoPauloDate.getUTCDay() + 1;
+  }
+
+  async createAppointment(params: {
+    clientId: string;
+    therapistId: string;
+    serviceId?: string;
+    date: string;
+    startTime: string;
+    endTime: string;
+    branchId?: string;
+    subscriptionId?: string;
+    notes?: string;
+  }) {
+    console.log('createAppointment - Parâmetros recebidos:', params);
+
+    const { clientId, therapistId, serviceId, date, startTime, endTime, branchId, subscriptionId, notes } = params;
+
     // 1. Verificar se o terapeuta tem schedule para o dia da semana e horário
-    const [year, month, day] = date.split('-').map(Number);
-    const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+    const dayOfWeek = this.getDayOfWeekFromDateString(date);
+    console.log('createAppointment - Dia da semana calculado:', dayOfWeek);
+
     const therapistAvailability = await this.prisma.schedule.findFirst({
       where: {
         therapistId,
@@ -33,16 +63,29 @@ export class AppointmentsService {
         endTime: { gte: endTime },
       },
     });
+
+    console.log('createAppointment - Disponibilidade encontrada:', therapistAvailability);
+
     if (!therapistAvailability) {
+      console.log('createAppointment - ERRO: Terapeuta não disponível neste horário');
+      
+      // Debug: listar todos os horários do terapeuta para debug
+      const allSchedules = await this.prisma.schedule.findMany({
+        where: { therapistId },
+        select: { dayOfWeek: true, startTime: true, endTime: true },
+      });
+      console.log('createAppointment - Todos os horários do terapeuta:', allSchedules);
+      
       throw new BadRequestException(
         'O terapeuta não está disponível neste horário.',
       );
     }
+
     // 2. Verificar se já existe agendamento para o terapeuta nesse horário e data
     const conflictingAppointment = await this.prisma.appointment.findFirst({
       where: {
         therapistId,
-        date: new Date(date),
+        date: this.parseDateString(date),
         OR: [
           {
             startTime: {
@@ -60,20 +103,20 @@ export class AppointmentsService {
         'Já existe um agendamento para esse terapeuta nesse horário.',
       );
     }
+
     // 3. Verificar se já existe agendamento para o cliente nesse horário e data
-    const conflictingClientAppointment =
-      await this.prisma.appointment.findFirst({
-        where: {
-          clientId,
-          date: new Date(date),
-          OR: [
-            {
-              startTime: { lte: endTime },
-              endTime: { gt: startTime },
-            },
-          ],
-        },
-      });
+    const conflictingClientAppointment = await this.prisma.appointment.findFirst({
+      where: {
+        clientId,
+        date: this.parseDateString(date),
+        OR: [
+          {
+            startTime: { lte: endTime },
+            endTime: { gt: startTime },
+          },
+        ],
+      },
+    });
     if (conflictingClientAppointment) {
       throw new BadRequestException(
         'O cliente já possui um agendamento nesse horário.',
@@ -81,29 +124,74 @@ export class AppointmentsService {
     }
 
     // Se não foi fornecido branchId, obter da terapeuta
-    if (!branchId) {
+    let finalBranchId = branchId;
+    if (!finalBranchId) {
       const therapistBranch = await this.prisma.therapistBranch.findFirst({
         where: { therapistId },
         select: { branchId: true },
       });
-      branchId = therapistBranch?.branchId || undefined;
+      finalBranchId = therapistBranch?.branchId || undefined;
     }
 
     // 4. Criar o agendamento
-    const data: any = {
+    const appointmentData: any = {
       clientId,
       therapistId,
-      date: new Date(date),
+      date: this.parseDateString(date),
       startTime,
       endTime,
       status: 'PENDING',
     };
 
-    if (branchId) {
-      data.branchId = branchId;
+    if (serviceId) {
+      appointmentData.serviceId = serviceId;
     }
 
-    return this.prisma.appointment.create({ data });
+    if (finalBranchId) {
+      appointmentData.branchId = finalBranchId;
+    }
+
+    if (notes) {
+      appointmentData.notes = notes;
+    }
+
+    const appointment = await this.prisma.appointment.create({ 
+      data: appointmentData,
+      include: {
+        client: true,
+        therapist: true,
+        service: true,
+        branch: true,
+      }
+    });
+
+    // 5. Se foi fornecido subscriptionId, tentar consumir uma sessão
+    if (subscriptionId) {
+      try {
+        const consumptionResult = await this.sessionConsumptionService.consumeSessionForAppointment(
+          subscriptionId,
+          appointment.id,
+          finalBranchId
+        );
+        
+        console.log('createAppointment - Sessão consumida:', consumptionResult);
+        
+        return {
+          ...appointment,
+          consumption: consumptionResult,
+          message: 'Agendamento criado e sessão consumida com sucesso'
+        };
+      } catch (error) {
+        console.log('createAppointment - Erro ao consumir sessão:', error.message);
+        
+        return {
+          ...appointment,
+          message: 'Agendamento criado sem consumo de sessão: ' + error.message
+        };
+      }
+    }
+
+    return appointment;
   }
 
   async listAppointmentsByClient(clientId: string, branchId?: string) {
@@ -147,6 +235,16 @@ export class AppointmentsService {
     month: string;
     branchId?: string;
   }) {
+    // Validar se o month foi fornecido
+    if (!month) {
+      throw new BadRequestException('O parâmetro "month" é obrigatório no formato YYYY-MM');
+    }
+
+    // Validar formato do month
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      throw new BadRequestException('O parâmetro "month" deve estar no formato YYYY-MM');
+    }
+
     // Implementação simples para retornar uma array de datas disponíveis
     const [year, monthNum] = month.split('-').map(Number);
 
@@ -160,7 +258,10 @@ export class AppointmentsService {
       d.setDate(d.getDate() + 1)
     ) {
       // Considerar apenas dias úteis (não domingos)
-      if (d.getDay() !== 0) {
+      // Usar a mesma lógica de cálculo de dia da semana
+      const dateStr = d.toISOString().split('T')[0];
+      const dayOfWeek = this.getDayOfWeekFromDateString(dateStr);
+      if (dayOfWeek !== 0) { // 0 = domingo no formato 1-7
         dates.push(new Date(d));
       }
     }
@@ -184,6 +285,20 @@ export class AppointmentsService {
     date: string;
     branchId?: string;
   }) {
+    // Validar parâmetros obrigatórios
+    if (!date) {
+      throw new BadRequestException('O parâmetro "date" é obrigatório no formato YYYY-MM-DD');
+    }
+
+    if (!therapistId) {
+      throw new BadRequestException('O parâmetro "therapistId" é obrigatório');
+    }
+
+    // Validar formato da data
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      throw new BadRequestException('O parâmetro "date" deve estar no formato YYYY-MM-DD');
+    }
+
     // Implementação simples para retornar slots disponíveis
     // Na prática, verificaria agendamentos existentes e disponibilidade do terapeuta
     const timeSlots = [
@@ -213,11 +328,8 @@ export class AppointmentsService {
       throw new Error(`Data inválida fornecida: ${date}`);
     }
 
-    const [year, month, day] = date.split('-').map(Number);
-    const selectedDate = new Date(Date.UTC(year, month - 1, day));
-    selectedDate.setUTCHours(12, 0, 0, 0);
-
-    const dayOfWeek = selectedDate.getUTCDay();
+    // Usar a mesma lógica de cálculo de dia da semana
+    const dayOfWeek = this.getDayOfWeekFromDateString(date);
 
     // 🔹 Buscar todas as disponibilidades das terapeutas para esse dia
     const allSchedules = await this.prisma.schedule.findMany({
@@ -300,23 +412,45 @@ export class AppointmentsService {
       }),
     );
   }
-  async findAll(branchId?: string) {
+  async findAll(branchId?: string, page: number = 1, limit: number = 50) {
+    const skip = (page - 1) * limit;
     const where: any = {};
 
     if (branchId) {
       where.branchId = branchId;
     }
 
-    return this.prisma.appointment.findMany({
-      where,
-      include: {
-        client: true,
-        therapist: true,
-      },
-      orderBy: {
-        date: 'asc',
-      },
-    });
+    const [appointments, total] = await Promise.all([
+      this.prisma.appointment.findMany({
+        where,
+        include: {
+          client: {
+            select: { id: true, name: true, email: true, phone: true }
+          },
+          therapist: {
+            select: { id: true, name: true, specialty: true }
+          },
+
+          branch: {
+            select: { id: true, name: true }
+          }
+        },
+        orderBy: {
+          date: 'desc',
+        },
+        skip,
+        take: limit,
+      }),
+      this.prisma.appointment.count({ where })
+    ]);
+
+    return {
+      data: appointments,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
   async update(id: string, data: any) {
     return this.prisma.appointment.update({
@@ -356,8 +490,8 @@ export class AppointmentsService {
   }) {
     const where: any = {
       date: {
-        gte: new Date(start),
-        lte: new Date(end),
+        gte: this.parseDateString(start),
+        lte: this.parseDateString(end),
       },
     };
 

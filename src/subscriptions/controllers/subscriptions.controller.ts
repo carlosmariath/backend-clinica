@@ -30,17 +30,23 @@ export class SubscriptionsController {
   @ApiQuery({ name: 'status', required: false, description: 'Filtrar por status' })
   @ApiQuery({ name: 'branchId', required: false, description: 'Filtrar por uma filial específica' })
   @ApiQuery({ name: 'branchIds', required: false, description: 'Filtrar por múltiplas filiais', isArray: true })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Número da página (padrão: 1)' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Itens por página (padrão: 20)' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Lista de assinaturas', type: [SubscriptionDto] })
   async findAll(
     @Query('clientId') clientId?: string,
     @Query('status') status?: string,
     @Query('branchId') branchId?: string,
-    @Query('branchIds') branchIds?: string[]
-  ): Promise<SubscriptionDto[]> {
+    @Query('branchIds') branchIds?: string[],
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ): Promise<{ data: SubscriptionDto[]; total: number; page: number; limit: number }> {
     // Unificar os parâmetros de filial para compatibilidade
     const branches = branchIds?.length ? branchIds : (branchId ? [branchId] : undefined);
+    const pageNum = parseInt(page || '1', 10);
+    const limitNum = parseInt(limit || '20', 10);
     
-    return this.subscriptionsService.findAll(clientId, status, branches);
+    return this.subscriptionsService.findAll(clientId, status, branches, pageNum, limitNum);
   }
 
   @Get(':id')

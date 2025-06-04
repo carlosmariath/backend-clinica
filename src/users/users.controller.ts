@@ -1,4 +1,17 @@
-import { Controller, Get, Post, Body, UseGuards, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  UseGuards,
+  Patch,
+  Param,
+  Delete,
+  Put,
+  NotFoundException,
+  BadRequestException,
+  Query,
+} from '@nestjs/common';
 import { UsersService } from './users.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
@@ -12,10 +25,33 @@ export class UsersController {
 
   @Get('clients')
   async listClients() {
-    return this.usersService.findAllClients();
+    // Manter comportamento antigo para compatibilidade
+    const result = await this.usersService.findAllClients();
+    return result.data || result; // Retorna só os dados para compatibilidade
   }
 
-  // 🔹 Endpoint para criar um novo cliente
+  @Get('clients/paginated')
+  async listClientsPaginated(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
+  ) {
+    const pageNum = parseInt(page || '1', 10);
+    const limitNum = parseInt(limit || '20', 10);
+    
+    return this.usersService.findAllClients(pageNum, limitNum);
+  }
+
+  @Get('clients/:id')
+  async getClientById(@Param('id') id: string) {
+    const client = await this.usersService.findById(id);
+
+    if (!client || client.role !== 'CLIENT') {
+      throw new NotFoundException('Cliente não encontrado');
+    }
+
+    return client;
+  }
+
   @Post('clients')
   async createClient(
     @Body()
@@ -25,14 +61,50 @@ export class UsersController {
       phone?: string;
     },
   ) {
-    return this.usersService.createClient(
-      body.name,
-      body.email,
-      body.phone
-    );
+    return this.usersService.createClient(body.name, body.email, body.phone);
   }
 
-  // 🔹 Endpoint para listar apenas usuários administrativos (ADMIN e RECEPTIONIST)
+  @Put('clients/:id')
+  async updateClient(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      email?: string;
+      phone?: string;
+    },
+  ) {
+    const existingClient = await this.usersService.findById(id);
+
+    if (!existingClient) {
+      throw new NotFoundException('Cliente não encontrado');
+    }
+
+    if (existingClient.role !== 'CLIENT') {
+      throw new BadRequestException('O usuário não é um cliente');
+    }
+
+    return this.usersService.updateUser(id, {
+      ...body,
+      role: 'CLIENT',
+    });
+  }
+
+  @Delete('clients/:id')
+  async deleteClient(@Param('id') id: string) {
+    const existingClient = await this.usersService.findById(id);
+
+    if (!existingClient) {
+      throw new NotFoundException('Cliente não encontrado');
+    }
+
+    if (existingClient.role !== 'CLIENT') {
+      throw new BadRequestException('O usuário não é um cliente');
+    }
+
+    return this.usersService.deleteUser(id);
+  }
+
   @Get('admin')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -40,7 +112,6 @@ export class UsersController {
     return this.usersService.findAdminUsers();
   }
 
-  // 🔹 Endpoint para criar usuários administrativos (apenas ADMIN)
   @Post('admin')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -57,15 +128,14 @@ export class UsersController {
   ) {
     return this.usersService.createUser(
       body.name,
-      body.email, 
+      body.email,
       body.password,
       body.role,
       body.phone,
-      body.branchId
+      body.branchId,
     );
   }
 
-  // 🔹 Endpoint para atualizar usuários administrativos (apenas ADMIN)
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -84,7 +154,6 @@ export class UsersController {
     return this.usersService.updateUser(id, body);
   }
 
-  // 🔹 Endpoint para excluir usuários (apenas ADMIN)
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')

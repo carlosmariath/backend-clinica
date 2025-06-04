@@ -23,6 +23,106 @@ enum AppointmentStatus {
 export class SessionConsumptionService {
   constructor(private prisma: PrismaService) {}
 
+  // Consumir uma sessão de uma subscrição específica para um agendamento
+  async consumeSessionForAppointment(subscriptionId: string, appointmentId: string, branchId?: string) {
+    // Verificar se o agendamento existe
+    const appointment = await this.prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: {
+        client: true,
+        branch: true,
+      },
+    });
+
+    if (!appointment) {
+      throw new NotFoundException(`Agendamento com ID ${appointmentId} não encontrado`);
+    }
+
+    // Verificar se o agendamento já tem um consumo associado
+    const existingConsumption = await this.prisma.subscriptionConsumption.findUnique({
+      where: { appointmentId },
+    });
+
+    if (existingConsumption) {
+      throw new BadRequestException(`Este agendamento já possui um consumo de sessão associado`);
+    }
+
+    // Buscar a subscrição específica
+    const subscription = await this.prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: {
+        therapyPlan: true,
+      },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException(`Subscrição com ID ${subscriptionId} não encontrada`);
+    }
+
+    if (subscription.clientId !== appointment.clientId) {
+      throw new BadRequestException(`Esta subscrição não pertence ao cliente do agendamento`);
+    }
+
+    if (subscription.status !== SubscriptionStatus.ACTIVE) {
+      throw new BadRequestException(`A subscrição não está ativa. Status atual: ${subscription.status}`);
+    }
+
+    if (subscription.remainingSessions <= 0) {
+      throw new BadRequestException(`A subscrição não possui sessões disponíveis`);
+    }
+
+    // Verificar se há um branchId válido
+    const finalBranchId = branchId || appointment.branchId || '2e65c193-e010-4a5d-9c91-2aa8c5935c99'; // ID da filial padrão
+    
+    // Usar transação para garantir atomicidade
+    return this.prisma.$transaction(async (prisma) => {
+      // Criar o consumo de sessão
+      const consumption = await prisma.subscriptionConsumption.create({
+        data: {
+          subscriptionId: subscription.id,
+          appointmentId,
+          branchId: finalBranchId,
+          consumedAt: new Date(),
+        },
+      });
+
+      // Decrementar o contador de sessões restantes
+      const updatedSubscription = await prisma.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          remainingSessions: subscription.remainingSessions - 1,
+          // Se chegar a zero, mudar o status para COMPLETED
+          ...(subscription.remainingSessions === 1
+            ? { status: SubscriptionStatus.COMPLETED }
+            : {}),
+        },
+      });
+
+      // Criar transação financeira para a sessão
+      const sessionPrice = subscription.therapyPlan.totalPrice / subscription.therapyPlan.totalSessions;
+      
+      await prisma.financialTransaction.create({
+        data: {
+          type: 'REVENUE',
+          amount: sessionPrice,
+          description: `Consumo de sessão - ${subscription.therapyPlan.name}`,
+          category: 'SESSION_CONSUMPTION',
+          date: new Date(),
+          clientId: appointment.clientId,
+          branchId: finalBranchId,
+          reference: consumption.id,
+          referenceType: 'consumption',
+        },
+      });
+
+      return {
+        consumption,
+        subscription: updatedSubscription,
+        sessionPrice,
+      };
+    });
+  }
+
   // Consumir uma sessão quando um agendamento é confirmado
   async consumeSession(appointmentId: string) {
     // Verificar se o agendamento existe

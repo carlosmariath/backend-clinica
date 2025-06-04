@@ -387,13 +387,13 @@ export class WhatsappService {
     const endHours = hours + 1; // Adiciona 1 hora
     const endTime = `${String(endHours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 
-    await this.appointmentsService.createAppointment(
+    await this.appointmentsService.createAppointment({
       clientId,
       therapistId,
       date,
-      time,
+      startTime: time,
       endTime,
-    );
+    });
 
     return this.sendMessage(
       phoneNumber,

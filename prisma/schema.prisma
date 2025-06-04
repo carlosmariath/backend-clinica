@@ -85,6 +85,7 @@ model Appointment {
   id           String            @id @default(uuid())
   clientId     String
   therapistId  String
+  serviceId    String?           // Serviço prestado no agendamento
   date         DateTime
   startTime    String
   endTime      String
@@ -97,6 +98,7 @@ model Appointment {
   branch       Branch?           @relation(fields: [branchId], references: [id])
   client       User              @relation(fields: [clientId], references: [id], onDelete: Cascade)
   therapist    Therapist         @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  service      Service?          @relation(fields: [serviceId], references: [id])
   consumption  SubscriptionConsumption? // Relação com o consumo de sessão
 }
 
@@ -153,6 +155,7 @@ model Service {
   branchId        String?
   branch          Branch?            @relation(fields: [branchId], references: [id])
   therapists      TherapistService[]
+  appointments    Appointment[]      // Agendamentos que usaram este serviço
 }
 
 model TherapistService {

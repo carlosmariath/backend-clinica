@@ -9,13 +9,17 @@ export class SubscriptionsService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Busca todas as assinaturas com filtros opcionais
+   * Busca todas as assinaturas com filtros opcionais e paginação
    */
   async findAll(
     clientId?: string,
     status?: string,
-    branchIds?: string | string[]
-  ): Promise<SubscriptionDto[]> {
+    branchIds?: string | string[],
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{ data: SubscriptionDto[]; total: number; page: number; limit: number; totalPages: number }> {
+    const skip = (page - 1) * limit;
+    
     // Constrói o where com os filtros opcionais
     const where: any = {};
     
@@ -39,18 +43,40 @@ export class SubscriptionsService {
       }
     }
     
-    const subscriptions = await this.prisma.subscription.findMany({
-      where,
-      include: {
-        client: true,
-        therapyPlan: true
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    });
+    const [subscriptions, total] = await Promise.all([
+      this.prisma.subscription.findMany({
+        where,
+        include: {
+          client: {
+            select: { id: true, name: true, email: true, phone: true }
+          },
+          therapyPlan: {
+            select: { 
+              id: true, 
+              name: true, 
+              description: true, 
+              totalSessions: true, 
+              totalPrice: true, 
+              validityDays: true 
+            }
+          }
+        },
+        orderBy: {
+          createdAt: 'desc'
+        },
+        skip,
+        take: limit
+      }),
+      this.prisma.subscription.count({ where })
+    ]);
     
-    return subscriptions as SubscriptionDto[];
+    return {
+      data: subscriptions as SubscriptionDto[],
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   /**

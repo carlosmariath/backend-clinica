@@ -68,14 +68,17 @@ export class AppointmentsController {
       );
     }
 
-    return this.appointmentsService.createAppointment(
-      body.clientId,
-      body.therapistId,
-      body.date,
-      body.startTime,
-      body.endTime,
+    return this.appointmentsService.createAppointment({
+      clientId: body.clientId,
+      therapistId: body.therapistId,
+      serviceId: body.serviceId,
+      date: body.date,
+      startTime: body.startTime,
+      endTime: body.endTime,
       branchId,
-    );
+      subscriptionId: body.subscriptionId,
+      notes: body.notes,
+    });
   }
 
   @Get('client')
@@ -108,10 +111,14 @@ export class AppointmentsController {
   async listAppointments(
     @Req() req: RequestWithUser,
     @Query('branchId') branchId?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string
   ) {
     const effectiveBranchId = branchId || req.user.branchId;
+    const pageNum = parseInt(page || '1', 10);
+    const limitNum = parseInt(limit || '20', 10);
 
-    return this.appointmentsService.findAll(effectiveBranchId);
+    return this.appointmentsService.findAll(effectiveBranchId, pageNum, limitNum);
   }
 
   @Put(':id')
