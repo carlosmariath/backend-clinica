@@ -204,6 +204,9 @@ export class AppointmentsService {
       where,
       include: {
         therapist: true,
+        service: {
+          select: { id: true, name: true, description: true, price: true, averageDuration: true }
+        },
         branch: true,
       },
     });
@@ -219,6 +222,9 @@ export class AppointmentsService {
       where,
       include: {
         client: true,
+        service: {
+          select: { id: true, name: true, description: true, price: true, averageDuration: true }
+        },
         branch: true,
       },
     });
@@ -430,7 +436,9 @@ export class AppointmentsService {
           therapist: {
             select: { id: true, name: true, specialty: true }
           },
-
+          service: {
+            select: { id: true, name: true, description: true, price: true, averageDuration: true }
+          },
           branch: {
             select: { id: true, name: true }
           }
@@ -504,6 +512,9 @@ export class AppointmentsService {
       include: {
         client: true,
         therapist: true,
+        service: {
+          select: { id: true, name: true, description: true, price: true, averageDuration: true }
+        },
         branch: true,
       },
     });
