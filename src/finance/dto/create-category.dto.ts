@@ -8,15 +8,15 @@ enum TransactionType {
 }
 
 export class CreateFinanceCategoryDto {
-  @ApiProperty({ description: 'Nome da categoria', example: 'Consultas Médicas' })
+  @ApiProperty({ description: 'Nome da categoria financeira', example: 'Consultas e Sessões' })
   @IsString()
   name: string;
 
-  @ApiProperty({ description: 'Tipo da transação (REVENUE ou EXPENSE)', enum: TransactionType })
+  @ApiProperty({ description: 'Tipo da categoria (REVENUE para receitas, EXPENSE para despesas)', enum: TransactionType, example: 'REVENUE' })
   @IsEnum(TransactionType)
   type: TransactionType;
 
-  @ApiProperty({ description: 'Descrição da categoria (opcional)', example: 'Valores recebidos por consultas', required: false })
+  @ApiProperty({ description: 'Descrição detalhada da categoria (opcional)', example: 'Receitas provenientes de consultas e sessões de terapia', required: false })
   @IsString()
   @IsOptional()
   description?: string;

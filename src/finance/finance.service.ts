@@ -8,17 +8,17 @@ import { CreatePaymentMethodDto } from './dto/create-payment-method.dto';
 import { UpdatePaymentMethodDto } from './dto/update-payment-method.dto';
 import { Prisma } from '@prisma/client';
 
-// Definir explicitamente o enum
+// Enum para tipos de transação financeira
 enum TransactionType {
-  REVENUE = 'REVENUE',
-  EXPENSE = 'EXPENSE'
+  REVENUE = 'REVENUE', // Receitas
+  EXPENSE = 'EXPENSE'  // Despesas
 }
 
 @Injectable()
 export class FinanceService {
   constructor(private prisma: PrismaService) {}
 
-  // =========== TRANSAÇÕES FINANCEIRAS ===========
+  // =========== GESTÃO DE TRANSAÇÕES FINANCEIRAS ===========
 
   async createTransaction(createTransactionDto: CreateTransactionDto) {
     // Verificar se a categoria existe, se fornecida
@@ -246,7 +246,7 @@ export class FinanceService {
     });
   }
 
-  // =========== CATEGORIAS FINANCEIRAS ===========
+  // =========== GESTÃO DE CATEGORIAS FINANCEIRAS ===========
 
   async createCategory(createCategoryDto: CreateFinanceCategoryDto) {
     // Verificar se já existe uma categoria com o mesmo nome
@@ -339,7 +339,7 @@ export class FinanceService {
     });
   }
 
-  // =========== MÉTODOS DE PAGAMENTO ===========
+  // =========== GESTÃO DE MÉTODOS DE PAGAMENTO ===========
 
   async createPaymentMethod(createMethodDto: CreatePaymentMethodDto) {
     // Verificar se já existe um método com o mesmo nome
@@ -435,7 +435,7 @@ export class FinanceService {
     });
   }
 
-  // =========== RELATÓRIOS FINANCEIROS ===========
+  // =========== RELATÓRIOS E ANÁLISES FINANCEIRAS ===========
 
   async getFinancialSummary(
     startDate?: string,

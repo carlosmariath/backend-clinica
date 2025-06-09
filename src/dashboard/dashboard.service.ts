@@ -1,6 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
+interface TransactionData {
+  amount: number;
+  date: Date;
+}
+
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
@@ -29,19 +34,20 @@ export class DashboardService {
     const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-    const [
-      totalAppointmentsCurrentMonth,
-      totalAppointmentsPreviousMonth,
-      confirmedSessions,
-      canceledSessions,
-      pendingSessions,
-      clientsCount,
-      activeClientsData,
-      newClients,
-      therapistsCount,
-      revenueCurrentMonth,
-      revenuePreviousMonth,
-    ] = await Promise.all([
+    try {
+      const [
+        totalAppointmentsCurrentMonth,
+        totalAppointmentsPreviousMonth,
+        confirmedSessions,
+        canceledSessions,
+        pendingSessions,
+        clientsCount,
+        activeClientsData,
+        newClients,
+        therapistsCount,
+        revenueCurrentMonth,
+        revenuePreviousMonth,
+      ] = await Promise.all([
       this.prisma.appointment.count({
         where: {
           date: {
@@ -122,7 +128,7 @@ export class DashboardService {
         _sum: {
           amount: true,
         },
-      }),
+      }).catch(() => ({ _sum: { amount: 0 } })),
       this.prisma.financialTransaction.aggregate({
         where: {
           type: 'REVENUE',
@@ -134,58 +140,81 @@ export class DashboardService {
         _sum: {
           amount: true,
         },
-      }),
+      }).catch(() => ({ _sum: { amount: 0 } })),
     ]);
 
-    const activeClients = activeClientsData.length;
-    const currentRevenue = revenueCurrentMonth._sum?.amount || 0;
-    const previousRevenue = revenuePreviousMonth._sum?.amount || 0;
+      const activeClients = activeClientsData.length;
+      const currentRevenue = revenueCurrentMonth._sum?.amount || 0;
+      const previousRevenue = revenuePreviousMonth._sum?.amount || 0;
 
-    const confirmationRate = totalAppointmentsCurrentMonth > 0
-      ? (confirmedSessions / totalAppointmentsCurrentMonth) * 100
-      : 0;
+      const confirmationRate = totalAppointmentsCurrentMonth > 0
+        ? (confirmedSessions / totalAppointmentsCurrentMonth) * 100
+        : 0;
 
-    const appointmentsTrend = totalAppointmentsPreviousMonth > 0
-      ? ((totalAppointmentsCurrentMonth - totalAppointmentsPreviousMonth) / totalAppointmentsPreviousMonth) * 100
-      : 0;
+      const appointmentsTrend = totalAppointmentsPreviousMonth > 0
+        ? ((totalAppointmentsCurrentMonth - totalAppointmentsPreviousMonth) / totalAppointmentsPreviousMonth) * 100
+        : 0;
 
-    const previousMonthClients = await this.prisma.user.count({
-      where: {
-        role: 'CLIENT',
-        createdAt: {
-          lte: endOfPreviousMonth,
+      const previousMonthClients = await this.prisma.user.count({
+        where: {
+          role: 'CLIENT',
+          createdAt: {
+            lte: endOfPreviousMonth,
+          },
         },
-      },
-    });
+      });
 
-    const currentMonthClients = clientsCount;
-    const clientsTrend = previousMonthClients > 0
-      ? ((currentMonthClients - previousMonthClients) / previousMonthClients) * 100
-      : 0;
+      const currentMonthClients = clientsCount;
+      const clientsTrend = previousMonthClients > 0
+        ? ((currentMonthClients - previousMonthClients) / previousMonthClients) * 100
+        : 0;
 
-    const revenueTrend = previousRevenue > 0
-      ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
-      : 0;
+      const revenueTrend = previousRevenue > 0
+        ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
+        : 0;
 
-    return {
-      totalAppointments: totalAppointmentsCurrentMonth,
-      confirmedSessions,
-      canceledSessions,
-      pendingSessions,
-      clientsCount,
-      activeClients,
-      newClients,
-      therapistsCount,
-      revenue: {
-        current: currentRevenue,
-        previous: previousRevenue,
-        trend: revenueTrend,
-      },
-      confirmationRate: Math.round(confirmationRate * 100) / 100,
-      appointmentsTrend: Math.round(appointmentsTrend * 100) / 100,
-      clientsTrend: Math.round(clientsTrend * 100) / 100,
-      revenueTrend: Math.round(revenueTrend * 100) / 100,
-    };
+      return {
+        totalAppointments: totalAppointmentsCurrentMonth,
+        confirmedSessions,
+        canceledSessions,
+        pendingSessions,
+        clientsCount,
+        activeClients,
+        newClients,
+        therapistsCount,
+        revenue: {
+          current: currentRevenue,
+          previous: previousRevenue,
+          trend: revenueTrend,
+        },
+        confirmationRate: Math.round(confirmationRate * 100) / 100,
+        appointmentsTrend: Math.round(appointmentsTrend * 100) / 100,
+        clientsTrend: Math.round(clientsTrend * 100) / 100,
+        revenueTrend: Math.round(revenueTrend * 100) / 100,
+      };
+    } catch (error) {
+      console.error('Erro ao buscar estatísticas do dashboard:', error);
+      // Retornar dados padrão em caso de erro
+      return {
+        totalAppointments: 0,
+        confirmedSessions: 0,
+        canceledSessions: 0,
+        pendingSessions: 0,
+        clientsCount: 0,
+        activeClients: 0,
+        newClients: 0,
+        therapistsCount: 0,
+        revenue: {
+          current: 0,
+          previous: 0,
+          trend: 0,
+        },
+        confirmationRate: 0,
+        appointmentsTrend: 0,
+        clientsTrend: 0,
+        revenueTrend: 0,
+      };
+    }
   }
 
   async getUpcomingAppointments(limit: number = 5) {
@@ -268,7 +297,7 @@ export class DashboardService {
         break;
     }
 
-    const transactions = await this.prisma.financialTransaction.findMany({
+    const transactions: TransactionData[] = await this.prisma.financialTransaction.findMany({
       where: {
         type: 'REVENUE',
         date: {
@@ -280,7 +309,7 @@ export class DashboardService {
         amount: true,
         date: true,
       },
-    });
+    }).catch(() => []);
 
     const data = new Array(labels.length).fill(0);
     

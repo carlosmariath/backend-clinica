@@ -21,24 +21,24 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
-// Definir explicitamente o enum
+// Enum para tipos de transação financeira
 enum TransactionType {
-  REVENUE = 'REVENUE',
-  EXPENSE = 'EXPENSE'
+  REVENUE = 'REVENUE', // Receitas
+  EXPENSE = 'EXPENSE'  // Despesas
 }
 
-@ApiTags('Finance')
+@ApiTags('Finanças')
 @Controller('finance')
 @UseGuards(JwtAuthGuard)
 export class FinanceController {
   constructor(private readonly financeService: FinanceService) {}
 
-  // =========== TRANSAÇÕES FINANCEIRAS ===========
+  // =========== GESTÃO DE TRANSAÇÕES FINANCEIRAS ===========
 
   @Post('transactions')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Criar uma nova transação financeira' })
+  @ApiOperation({ summary: 'Registrar nova transação financeira', description: 'Cria uma nova transação de receita ou despesa no sistema' })
   createTransaction(@Body() createTransactionDto: CreateTransactionDto) {
     return this.financeService.createTransaction(createTransactionDto);
   }
@@ -46,13 +46,13 @@ export class FinanceController {
   @Get('transactions')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Listar todas as transações financeiras' })
-  @ApiQuery({ name: 'startDate', required: false, description: 'Data inicial (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'endDate', required: false, description: 'Data final (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'type', required: false, description: 'Tipo de transação (REVENUE/EXPENSE)' })
-  @ApiQuery({ name: 'clientId', required: false, description: 'Filtrar por cliente' })
-  @ApiQuery({ name: 'branchId', required: false, description: 'Filtrar por filial' })
-  @ApiQuery({ name: 'categoryId', required: false, description: 'Filtrar por categoria' })
+  @ApiOperation({ summary: 'Listar transações financeiras', description: 'Obtém lista de transações com filtros opcionais por período, tipo, cliente, filial ou categoria' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Data inicial para filtro (formato: YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Data final para filtro (formato: YYYY-MM-DD)' })
+  @ApiQuery({ name: 'type', required: false, description: 'Filtrar por tipo: REVENUE (receitas) ou EXPENSE (despesas)' })
+  @ApiQuery({ name: 'clientId', required: false, description: 'ID do cliente para filtrar transações específicas' })
+  @ApiQuery({ name: 'branchId', required: false, description: 'ID da filial para filtrar transações específicas' })
+  @ApiQuery({ name: 'categoryId', required: false, description: 'ID da categoria financeira para filtrar transações' })
   findAllTransactions(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -74,8 +74,8 @@ export class FinanceController {
   @Get('transactions/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Obter uma transação específica' })
-  @ApiParam({ name: 'id', description: 'ID da transação' })
+  @ApiOperation({ summary: 'Detalhar transação financeira', description: 'Obtém detalhes completos de uma transação específica' })
+  @ApiParam({ name: 'id', description: 'ID único da transação financeira' })
   findTransactionById(@Param('id') id: string) {
     return this.financeService.findTransactionById(id);
   }
@@ -83,8 +83,8 @@ export class FinanceController {
   @Patch('transactions/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Atualizar uma transação' })
-  @ApiParam({ name: 'id', description: 'ID da transação' })
+  @ApiOperation({ summary: 'Atualizar transação financeira', description: 'Modifica dados de uma transação existente' })
+  @ApiParam({ name: 'id', description: 'ID único da transação financeira' })
   updateTransaction(
     @Param('id') id: string,
     @Body() updateTransactionDto: UpdateTransactionDto,
@@ -95,18 +95,18 @@ export class FinanceController {
   @Delete('transactions/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Remover uma transação' })
-  @ApiParam({ name: 'id', description: 'ID da transação' })
+  @ApiOperation({ summary: 'Excluir transação financeira', description: 'Remove permanentemente uma transação do sistema' })
+  @ApiParam({ name: 'id', description: 'ID único da transação financeira' })
   removeTransaction(@Param('id') id: string) {
     return this.financeService.removeTransaction(id);
   }
 
-  // =========== CATEGORIAS FINANCEIRAS ===========
+  // =========== GESTÃO DE CATEGORIAS FINANCEIRAS ===========
 
   @Post('categories')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Criar uma nova categoria financeira' })
+  @ApiOperation({ summary: 'Criar categoria financeira', description: 'Cria uma nova categoria para classificação de receitas ou despesas' })
   createCategory(@Body() createCategoryDto: CreateFinanceCategoryDto) {
     return this.financeService.createCategory(createCategoryDto);
   }
@@ -114,8 +114,8 @@ export class FinanceController {
   @Get('categories')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Listar todas as categorias financeiras' })
-  @ApiQuery({ name: 'type', required: false, description: 'Filtrar por tipo (REVENUE/EXPENSE)' })
+  @ApiOperation({ summary: 'Listar categorias financeiras', description: 'Obtém lista de categorias disponíveis, com filtro opcional por tipo' })
+  @ApiQuery({ name: 'type', required: false, description: 'Filtrar categorias por tipo: REVENUE (receitas) ou EXPENSE (despesas)' })
   findAllCategories(@Query('type') type?: TransactionType) {
     return this.financeService.findAllCategories(type);
   }
@@ -123,8 +123,8 @@ export class FinanceController {
   @Get('categories/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Obter uma categoria específica' })
-  @ApiParam({ name: 'id', description: 'ID da categoria' })
+  @ApiOperation({ summary: 'Detalhar categoria financeira', description: 'Obtém detalhes de uma categoria específica incluindo estatísticas de uso' })
+  @ApiParam({ name: 'id', description: 'ID único da categoria financeira' })
   findCategoryById(@Param('id') id: string) {
     return this.financeService.findCategoryById(id);
   }
@@ -132,8 +132,8 @@ export class FinanceController {
   @Patch('categories/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Atualizar uma categoria' })
-  @ApiParam({ name: 'id', description: 'ID da categoria' })
+  @ApiOperation({ summary: 'Atualizar categoria financeira', description: 'Modifica dados de uma categoria existente' })
+  @ApiParam({ name: 'id', description: 'ID único da categoria financeira' })
   updateCategory(
     @Param('id') id: string,
     @Body() updateCategoryDto: UpdateFinanceCategoryDto,
@@ -144,18 +144,18 @@ export class FinanceController {
   @Delete('categories/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Remover uma categoria' })
-  @ApiParam({ name: 'id', description: 'ID da categoria' })
+  @ApiOperation({ summary: 'Excluir categoria financeira', description: 'Remove categoria (apenas se não houver transações associadas)' })
+  @ApiParam({ name: 'id', description: 'ID único da categoria financeira' })
   removeCategory(@Param('id') id: string) {
     return this.financeService.removeCategory(id);
   }
 
-  // =========== MÉTODOS DE PAGAMENTO ===========
+  // =========== GESTÃO DE MÉTODOS DE PAGAMENTO ===========
 
   @Post('payment-methods')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Criar um novo método de pagamento' })
+  @ApiOperation({ summary: 'Criar método de pagamento', description: 'Adiciona novo método de pagamento ao sistema' })
   createPaymentMethod(@Body() createMethodDto: CreatePaymentMethodDto) {
     return this.financeService.createPaymentMethod(createMethodDto);
   }
@@ -163,8 +163,8 @@ export class FinanceController {
   @Get('payment-methods')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Listar todos os métodos de pagamento' })
-  @ApiQuery({ name: 'onlyActive', required: false, description: 'Filtrar apenas ativos', type: 'boolean' })
+  @ApiOperation({ summary: 'Listar métodos de pagamento', description: 'Obtém lista de métodos disponíveis, com filtro opcional por status ativo' })
+  @ApiQuery({ name: 'onlyActive', required: false, description: 'Mostrar apenas métodos ativos (true/false)', type: 'boolean' })
   findAllPaymentMethods(@Query('onlyActive') onlyActive?: string) {
     return this.financeService.findAllPaymentMethods(onlyActive === 'true');
   }
@@ -172,8 +172,8 @@ export class FinanceController {
   @Get('payment-methods/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Obter um método de pagamento específico' })
-  @ApiParam({ name: 'id', description: 'ID do método de pagamento' })
+  @ApiOperation({ summary: 'Detalhar método de pagamento', description: 'Obtém detalhes de um método específico incluindo estatísticas de uso' })
+  @ApiParam({ name: 'id', description: 'ID único do método de pagamento' })
   findPaymentMethodById(@Param('id') id: string) {
     return this.financeService.findPaymentMethodById(id);
   }
@@ -181,8 +181,8 @@ export class FinanceController {
   @Patch('payment-methods/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Atualizar um método de pagamento' })
-  @ApiParam({ name: 'id', description: 'ID do método de pagamento' })
+  @ApiOperation({ summary: 'Atualizar método de pagamento', description: 'Modifica dados de um método existente ou altera status de ativo/inativo' })
+  @ApiParam({ name: 'id', description: 'ID único do método de pagamento' })
   updatePaymentMethod(
     @Param('id') id: string,
     @Body() updateMethodDto: UpdatePaymentMethodDto,
@@ -193,21 +193,21 @@ export class FinanceController {
   @Delete('payment-methods/:id')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Remover um método de pagamento' })
-  @ApiParam({ name: 'id', description: 'ID do método de pagamento' })
+  @ApiOperation({ summary: 'Excluir método de pagamento', description: 'Remove método (apenas se não houver transações associadas)' })
+  @ApiParam({ name: 'id', description: 'ID único do método de pagamento' })
   removePaymentMethod(@Param('id') id: string) {
     return this.financeService.removePaymentMethod(id);
   }
 
-  // =========== RELATÓRIOS FINANCEIROS ===========
+  // =========== RELATÓRIOS E ANÁLISES FINANCEIRAS ===========
 
   @Get('summary')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
-  @ApiOperation({ summary: 'Obter resumo financeiro' })
-  @ApiQuery({ name: 'startDate', required: false, description: 'Data inicial (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'endDate', required: false, description: 'Data final (YYYY-MM-DD)' })
-  @ApiQuery({ name: 'branchId', required: false, description: 'Filtrar por filial' })
+  @ApiOperation({ summary: 'Relatório resumo financeiro', description: 'Gera resumo com totais de receitas, despesas e balanço por período e filial' })
+  @ApiQuery({ name: 'startDate', required: false, description: 'Data inicial para filtro (formato: YYYY-MM-DD)' })
+  @ApiQuery({ name: 'endDate', required: false, description: 'Data final para filtro (formato: YYYY-MM-DD)' })
+  @ApiQuery({ name: 'branchId', required: false, description: 'ID da filial para filtrar transações específicas' })
   getFinancialSummary(
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,

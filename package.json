@@ -20,7 +20,7 @@
     "prebuild": "npx prisma generate",
     "build": "nest build",
     "postbuild": "npx prisma migrate deploy",
-    "start": "node dist/main",
+    "start": "node dist/src/main.js",
     "seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {

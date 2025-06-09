@@ -461,9 +461,15 @@ export class AppointmentsService {
     };
   }
   async update(id: string, data: any) {
+    const updatedData = { ...data };
+    
+    if (updatedData.date && typeof updatedData.date === 'string') {
+      updatedData.date = new Date(updatedData.date + 'T00:00:00.000Z');
+    }
+    
     return this.prisma.appointment.update({
       where: { id },
-      data,
+      data: updatedData,
     });
   }
 

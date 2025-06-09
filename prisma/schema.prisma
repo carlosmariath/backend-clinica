@@ -9,40 +9,40 @@ datasource db {
 }
 
 model Branch {
-  id                String            @id @default(uuid())
-  name              String
-  address           String
-  phone             String
-  email             String?
-  isActive          Boolean           @default(true)
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
-  appointments      Appointment[]
-  schedules         Schedule[]
-  services          Service[]
-  therapistBranches TherapistBranch[]
-  users             User[]
-  therapyPlans      TherapyPlan[]      @relation("TherapyPlanToBranch")
-  therapyPlanLinks  TherapyPlanBranch[]
-  subscriptions     Subscription[]    // Subscrições associadas a esta filial
-  financialTransactions FinancialTransaction[] // Transações financeiras associadas a esta filial
-  subscriptionConsumptions SubscriptionConsumption[] // Consumos de sessão nesta filial
+  id                       String                    @id @default(uuid())
+  name                     String
+  address                  String
+  phone                    String
+  email                    String?
+  isActive                 Boolean                   @default(true)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
+  appointments             Appointment[]
+  financialTransactions    FinancialTransaction[]
+  schedules                Schedule[]
+  services                 Service[]
+  subscriptions            Subscription[]
+  subscriptionConsumptions SubscriptionConsumption[]
+  therapistBranches        TherapistBranch[]
+  therapyPlanLinks         TherapyPlanBranch[]
+  users                    User[]
+  therapyPlans             TherapyPlan[]             @relation("TherapyPlanToBranch")
 }
 
 model User {
-  id           String        @id @default(uuid())
-  name         String
-  email        String        @unique
-  password     String
-  role         Role          @default(CLIENT)
-  createdAt    DateTime      @default(now())
-  phone        String        @unique
-  branchId     String?
-  appointments Appointment[]
-  ChatSession  ChatSession[]
-  branch       Branch?       @relation(fields: [branchId], references: [id])
-  subscriptions Subscription[] // Subscrições de planos de terapia do usuário
-  financialTransactions FinancialTransaction[] // Transações financeiras do usuário
+  id                    String                 @id @default(uuid())
+  name                  String
+  email                 String                 @unique
+  password              String
+  role                  Role                   @default(CLIENT)
+  createdAt             DateTime               @default(now())
+  phone                 String                 @unique
+  branchId              String?
+  appointments          Appointment[]
+  ChatSession           ChatSession[]
+  financialTransactions FinancialTransaction[]
+  subscriptions         Subscription[]
+  branch                Branch?                @relation(fields: [branchId], references: [id])
 }
 
 model Therapist {
@@ -82,24 +82,24 @@ model Schedule {
 }
 
 model Appointment {
-  id           String            @id @default(uuid())
-  clientId     String
-  therapistId  String
-  serviceId    String?           // Serviço prestado no agendamento
-  date         DateTime
-  startTime    String
-  endTime      String
-  status       AppointmentStatus @default(PENDING)
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
-  branchId     String?
-  notes        String?           // Observações do agendamento
-  noShowFee    Float?            // Taxa por não comparecimento (no-show)
-  branch       Branch?           @relation(fields: [branchId], references: [id])
-  client       User              @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  therapist    Therapist         @relation(fields: [therapistId], references: [id], onDelete: Cascade)
-  service      Service?          @relation(fields: [serviceId], references: [id])
-  consumption  SubscriptionConsumption? // Relação com o consumo de sessão
+  id          String                   @id @default(uuid())
+  clientId    String
+  therapistId String
+  date        DateTime
+  startTime   String
+  endTime     String
+  status      AppointmentStatus        @default(PENDING)
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+  branchId    String?
+  noShowFee   Float?
+  notes       String?
+  serviceId   String?
+  branch      Branch?                  @relation(fields: [branchId], references: [id])
+  client      User                     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  service     Service?                 @relation(fields: [serviceId], references: [id])
+  therapist   Therapist                @relation(fields: [therapistId], references: [id], onDelete: Cascade)
+  consumption SubscriptionConsumption?
 }
 
 model ChatSession {
@@ -153,9 +153,9 @@ model Service {
   price           Float
   averageDuration Int                @default(60)
   branchId        String?
+  appointments    Appointment[]
   branch          Branch?            @relation(fields: [branchId], references: [id])
   therapists      TherapistService[]
-  appointments    Appointment[]      // Agendamentos que usaram este serviço
 }
 
 model TherapistService {
@@ -166,119 +166,104 @@ model TherapistService {
   therapist   Therapist @relation(fields: [therapistId], references: [id], onDelete: Cascade)
 }
 
-// ======================= NOVOS MODELOS =======================
-
-// Plano de Terapia
 model TherapyPlan {
-  id            String         @id @default(uuid())
-  name          String         // Nome do plano (ex: "Plano Básico", "Plano Premium")
-  description   String?        // Descrição detalhada do plano
-  totalSessions Int            // Número total de sessões incluídas no plano
-  totalPrice    Float          // Preço total do plano
-  validityDays  Int            // Período de validade em dias
-  isActive      Boolean        @default(true) // Se o plano está ativo para novas adesões
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  subscriptions Subscription[] // Subscrições deste plano
-  
-  // Relação N:M com filiais
-  branchLinks   TherapyPlanBranch[] 
-  
-  // Campo virtual para facilitar acesso no frontend
-  branches      Branch[]       @relation("TherapyPlanToBranch")
+  id            String              @id @default(uuid())
+  name          String
+  description   String?
+  totalSessions Int
+  totalPrice    Float
+  validityDays  Int
+  isActive      Boolean             @default(true)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  subscriptions Subscription[]
+  branchLinks   TherapyPlanBranch[]
+  branches      Branch[]            @relation("TherapyPlanToBranch")
 }
 
-// Tabela de junção para relação N:M entre TherapyPlan e Branch
 model TherapyPlanBranch {
   id            String      @id @default(uuid())
-  therapyPlanId String      // ID do plano de terapia
-  branchId      String      // ID da filial
+  therapyPlanId String
+  branchId      String
   createdAt     DateTime    @default(now())
-  plan          TherapyPlan @relation(fields: [therapyPlanId], references: [id], onDelete: Cascade)
   branch        Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  plan          TherapyPlan @relation(fields: [therapyPlanId], references: [id], onDelete: Cascade)
 
   @@unique([therapyPlanId, branchId])
 }
 
-// Subscrição de Plano
 model Subscription {
-  id                String              @id @default(uuid())
-  therapyPlanId     String              // Plano contratado
-  clientId          String              // Cliente que adquiriu
-  branchId          String?             // Filial (opcional)
-  status            SubscriptionStatus  @default(ACTIVE) // Status da subscrição
-  startDate         DateTime            @default(now()) // Data de início
-  endDate           DateTime            // Data de término
-  totalSessions     Int                 // Número total de sessões do plano
-  remainingSessions Int                 // Contador de sessões restantes
-  createdAt         DateTime            @default(now())
-  updatedAt         DateTime            @updatedAt
-  therapyPlan       TherapyPlan         @relation(fields: [therapyPlanId], references: [id])
-  client            User                @relation(fields: [clientId], references: [id])
-  branch            Branch?             @relation(fields: [branchId], references: [id])
-  consumptions      SubscriptionConsumption[] // Consumos de sessão associados a esta subscrição
+  id                String                    @id @default(uuid())
+  clientId          String
+  branchId          String?
+  status            SubscriptionStatus        @default(ACTIVE)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+  therapyPlanId     String
+  startDate         DateTime                  @default(now())
+  endDate           DateTime
+  totalSessions     Int
+  remainingSessions Int
+  branch            Branch?                   @relation(fields: [branchId], references: [id])
+  client            User                      @relation(fields: [clientId], references: [id])
+  therapyPlan       TherapyPlan               @relation(fields: [therapyPlanId], references: [id])
+  consumptions      SubscriptionConsumption[]
 }
 
-// Consumo de Sessão (renomeamos para SubscriptionConsumption para corresponder ao serviço)
 model SubscriptionConsumption {
-  id              String        @id @default(uuid())
-  subscriptionId  String        // Subscrição associada
-  appointmentId   String        @unique // Agendamento que consumiu a sessão
-  branchId        String        // Filial onde a sessão foi consumida
-  consumedAt      DateTime      @default(now()) // Data/hora do consumo
-  wasRefunded     Boolean       @default(false) // Se a sessão foi estornada
-  refundReason    String?       // Motivo do estorno, se houver
-  createdAt       DateTime      @default(now())
-  subscription    Subscription  @relation(fields: [subscriptionId], references: [id])
-  appointment     Appointment   @relation(fields: [appointmentId], references: [id])
-  branch          Branch        @relation(fields: [branchId], references: [id])
+  id             String       @id @default(uuid())
+  subscriptionId String
+  appointmentId  String       @unique
+  branchId       String
+  consumedAt     DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  refundReason   String?
+  wasRefunded    Boolean      @default(false)
+  appointment    Appointment  @relation(fields: [appointmentId], references: [id])
+  branch         Branch       @relation(fields: [branchId], references: [id])
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id])
 }
 
-// Transação Financeira
 model FinancialTransaction {
-  id              String              @id @default(uuid())
-  type            TransactionType     // Tipo de transação (receita ou despesa)
-  amount          Float               // Valor da transação
-  description     String              // Descrição da transação
-  category        String              // Categoria (ex: "Venda de Plano", "No-show", "Operacional")
-  date            DateTime            // Data da transação
-  clientId        String?             // Cliente associado (opcional)
-  branchId        String?             // Filial associada (opcional)
-  reference       String?             // Referência a outros objetos (ex: ID de subscription, appointment)
-  referenceType   String?             // Tipo de referência (ex: "subscription", "appointment")
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  paymentMethod   PaymentMethod?      @relation(fields: [paymentMethodId], references: [id])
-  paymentMethodId String?
-  client          User?               @relation(fields: [clientId], references: [id])
-  branch          Branch?             @relation(fields: [branchId], references: [id])
-  financeCategory FinanceCategory?    @relation(fields: [financeCategoryId], references: [id])
+  id                String           @id @default(uuid())
+  type              TransactionType
+  amount            Float
+  description       String
+  category          String
+  date              DateTime
+  clientId          String?
+  branchId          String?
+  reference         String?
+  referenceType     String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  paymentMethodId   String?
   financeCategoryId String?
+  branch            Branch?          @relation(fields: [branchId], references: [id])
+  client            User?            @relation(fields: [clientId], references: [id])
+  financeCategory   FinanceCategory? @relation(fields: [financeCategoryId], references: [id])
+  paymentMethod     PaymentMethod?   @relation(fields: [paymentMethodId], references: [id])
 }
 
-// Categoria Financeira
 model FinanceCategory {
-  id           String                @id @default(uuid())
-  name         String                @unique // Nome da categoria
-  type         TransactionType       // Se é categoria de receita ou despesa
-  description  String?               // Descrição da categoria
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  id           String                 @id @default(uuid())
+  name         String                 @unique
+  type         TransactionType
+  description  String?
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
   transactions FinancialTransaction[]
 }
 
-// Método de Pagamento
 model PaymentMethod {
-  id           String                @id @default(uuid())
-  name         String                @unique // Nome do método (ex: "Cartão de Crédito", "PIX")
-  description  String?               // Descrição adicional
-  isActive     Boolean               @default(true) // Se está ativo para uso
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  id           String                 @id @default(uuid())
+  name         String                 @unique
+  description  String?
+  isActive     Boolean                @default(true)
+  createdAt    DateTime               @default(now())
+  updatedAt    DateTime               @updatedAt
   transactions FinancialTransaction[]
 }
-
-// ======================= ENUMS =======================
 
 enum Role {
   ADMIN
@@ -292,18 +277,18 @@ enum AppointmentStatus {
   CONFIRMED
   CANCELED
   COMPLETED
-  NO_SHOW // Novo status: cliente não compareceu
+  NO_SHOW
 }
 
 enum SubscriptionStatus {
-  PENDING    // Aguardando aceite do cliente
-  ACTIVE     // Cliente aceitou e plano está ativo
-  COMPLETED  // Todas as sessões foram utilizadas
-  EXPIRED    // Prazo de validade expirou
-  CANCELED   // Cancelado manualmente
+  PENDING
+  ACTIVE
+  COMPLETED
+  EXPIRED
+  CANCELED
 }
 
 enum TransactionType {
-  REVENUE    // Receita
-  EXPENSE    // Despesa
+  REVENUE
+  EXPENSE
 }

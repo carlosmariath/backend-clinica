@@ -8,52 +8,52 @@ enum TransactionType {
 }
 
 export class CreateTransactionDto {
-  @ApiProperty({ description: 'Tipo da transação (REVENUE ou EXPENSE)', enum: TransactionType })
+  @ApiProperty({ description: 'Tipo da transação (REVENUE para receitas, EXPENSE para despesas)', enum: TransactionType, example: 'REVENUE' })
   @IsEnum(TransactionType)
   type: TransactionType;
 
-  @ApiProperty({ description: 'Valor da transação', example: 100.00 })
+  @ApiProperty({ description: 'Valor da transação em reais', example: 150.00 })
   @IsNumber()
   amount: number;
 
-  @ApiProperty({ description: 'Descrição da transação', example: 'Pagamento de consulta' })
+  @ApiProperty({ description: 'Descrição detalhada da transação', example: 'Sessão de psicoterapia individual - Paciente João Silva' })
   @IsString()
   description: string;
 
-  @ApiProperty({ description: 'Categoria da transação', example: 'CONSULTA' })
+  @ApiProperty({ description: 'Categoria legácia da transação (use financeCategoryId para nova estrutura)', example: 'CONSULTA' })
   @IsString()
   category: string;
 
-  @ApiProperty({ description: 'Data da transação', example: '2023-08-15T10:00:00Z' })
+  @ApiProperty({ description: 'Data e hora da transação', example: '2024-08-15T10:00:00Z' })
   @IsDateString()
   date: string;
 
-  @ApiProperty({ description: 'ID do cliente relacionado (opcional)', example: 'uuid', required: false })
+  @ApiProperty({ description: 'ID do cliente associado à transação (opcional)', example: '550e8400-e29b-41d4-a716-446655440000', required: false })
   @IsUUID()
   @IsOptional()
   clientId?: string;
 
-  @ApiProperty({ description: 'ID da filial relacionada (opcional)', example: 'uuid', required: false })
+  @ApiProperty({ description: 'ID da filial onde ocorreu a transação (opcional)', example: '550e8400-e29b-41d4-a716-446655440000', required: false })
   @IsUUID()
   @IsOptional()
   branchId?: string;
 
-  @ApiProperty({ description: 'Referência a outro objeto (opcional)', example: 'uuid', required: false })
+  @ApiProperty({ description: 'Referência a outro objeto do sistema (opcional)', example: '550e8400-e29b-41d4-a716-446655440000', required: false })
   @IsString()
   @IsOptional()
   reference?: string;
 
-  @ApiProperty({ description: 'Tipo de referência (opcional)', example: 'appointment', required: false })
+  @ApiProperty({ description: 'Tipo da referência (appointment, subscription, etc.)', example: 'appointment', required: false })
   @IsString()
   @IsOptional()
   referenceType?: string;
 
-  @ApiProperty({ description: 'ID do método de pagamento (opcional)', example: 'uuid', required: false })
+  @ApiProperty({ description: 'ID do método de pagamento utilizado (opcional)', example: '550e8400-e29b-41d4-a716-446655440000', required: false })
   @IsUUID()
   @IsOptional()
   paymentMethodId?: string;
 
-  @ApiProperty({ description: 'ID da categoria financeira (opcional)', example: 'uuid', required: false })
+  @ApiProperty({ description: 'ID da categoria financeira (recomendado para nova estrutura)', example: '550e8400-e29b-41d4-a716-446655440000', required: false })
   @IsUUID()
   @IsOptional()
   financeCategoryId?: string;
