@@ -1,0 +1,153 @@
+name: 🔍 PR Validation
+
+on:
+  pull_request:
+    branches: [main, master, develop, staging]
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  # ============= VALIDAÇÃO DE PR =============
+  pr-validation:
+    name: 🔍 PR Quality Check
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: 📥 Install dependencies
+        run: npm ci
+        
+      - name: 🔍 Lint check
+        run: npm run lint
+        
+      - name: 💅 Format check
+        run: npm run format -- --check
+        
+      - name: 🏗️ Build check
+        run: npm run build
+        
+      - name: 🗄️ Database migration check
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+        run: |
+          npx prisma migrate deploy
+          npx prisma generate
+          
+      - name: 🧪 Run tests
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+          JWT_SECRET: test-secret
+        run: |
+          npm run test
+          npm run test:e2e
+          
+      - name: 🔒 Security check
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+        
+      - name: 📏 Check bundle size
+        run: |
+          npm run build
+          echo "## 📦 Bundle Size Analysis" >> $GITHUB_STEP_SUMMARY
+          du -h dist/ >> $GITHUB_STEP_SUMMARY
+          
+      - name: 📊 PR Summary Comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            // Ler resultados dos testes (se existir)
+            let testResults = '';
+            try {
+              testResults = fs.readFileSync('test-results.txt', 'utf8');
+            } catch (e) {
+              testResults = 'Testes executados com sucesso ✅';
+            }
+            
+            const comment = `
+            ## 🔍 PR Validation Results
+            
+            ### ✅ Quality Checks
+            - 🔍 **Lint:** Passed
+            - 💅 **Format:** Passed  
+            - 🏗️ **Build:** Passed
+            - 🗄️ **Database:** Migrations OK
+            - 🧪 **Tests:** ${testResults}
+            - 🔒 **Security:** Scanned
+            
+            ### 📦 Build Information
+            - **Node Version:** ${process.env.NODE_VERSION}
+            - **Bundle Size:** Generated successfully
+            - **Database Schema:** Valid
+            
+            > This PR is ready for review! 🚀
+            `;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+  # ============= ANÁLISE DE MUDANÇAS =============
+  change-analysis:
+    name: 📈 Change Analysis
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          
+      - name: 📊 Analyze changes
+        run: |
+          echo "## 📈 Change Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "### Files Changed:" >> $GITHUB_STEP_SUMMARY
+          git diff --name-only origin/${{ github.base_ref }}...HEAD >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Lines Changed:" >> $GITHUB_STEP_SUMMARY
+          git diff --stat origin/${{ github.base_ref }}...HEAD >> $GITHUB_STEP_SUMMARY
+          
+          # Verificar se há mudanças no schema do banco
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "prisma/schema.prisma"; then
+            echo "⚠️ **Database schema changes detected!**" >> $GITHUB_STEP_SUMMARY
+            echo "Please ensure migrations are included." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Verificar se há mudanças em dependências
+          if git diff --name-only origin/${{ github.base_ref }}...HEAD | grep -q "package.json"; then
+            echo "📦 **Package.json changes detected!**" >> $GITHUB_STEP_SUMMARY
+            echo "Dependencies may have changed." >> $GITHUB_STEP_SUMMARY
+          fi

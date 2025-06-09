@@ -1,0 +1,364 @@
+name: 🚀 CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, master, develop, staging]
+  pull_request:
+    branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente para deploy manual'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - development
+        - staging
+        - production
+
+env:
+  NODE_VERSION: '20'
+  
+jobs:
+  # ============= LINT E ANÁLISE DE CÓDIGO =============
+  lint:
+    name: 🔍 Lint & Code Quality
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: 📥 Install dependencies
+        run: npm ci
+        
+      - name: 🔍 Run ESLint
+        run: npm run lint
+        
+      - name: 💅 Check code formatting
+        run: npm run format -- --check
+        
+      - name: 📊 Upload lint results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lint-results
+          path: |
+            eslint-report.json
+            .coverage/
+          retention-days: 7
+
+  # ============= TESTES =============
+  test:
+    name: 🧪 Tests
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: 📥 Install dependencies
+        run: npm ci
+        
+      - name: 🗄️ Setup test database
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+        run: |
+          npx prisma migrate deploy
+          npx prisma db seed
+          
+      - name: 🧪 Run unit tests
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+          JWT_SECRET: test-secret
+        run: npm run test
+        
+      - name: 🧪 Run e2e tests
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+          JWT_SECRET: test-secret
+        run: npm run test:e2e
+        
+      - name: 📊 Upload test coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/lcov.info
+          flags: backend
+          name: backend-coverage
+
+  # ============= BUILD =============
+  build:
+    name: 🏗️ Build Application
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: 📥 Install dependencies
+        run: npm ci
+        
+      - name: 🏗️ Build application
+        run: npm run build
+        
+      - name: 📦 Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-files
+          path: |
+            dist/
+            package*.json
+            prisma/
+          retention-days: 7
+
+  # ============= SECURITY SCAN =============
+  security:
+    name: 🔒 Security Scan
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: 🔒 Run npm audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+        
+      - name: 🔒 Run Snyk security scan
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+        continue-on-error: true
+
+  # ============= DEPLOY DEVELOPMENT =============
+  deploy-development:
+    name: 🚀 Deploy to Development
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'development')
+    environment: development
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-files
+          
+      - name: 🚀 Deploy to Railway (Development)
+        uses: railway-deploy/railway-deploy@v0.1.4
+        with:
+          api_token: ${{ secrets.RAILWAY_TOKEN_DEV }}
+          service_id: ${{ secrets.RAILWAY_SERVICE_ID_DEV }}
+          environment_variables: |
+            NODE_ENV=development
+            DATABASE_URL=${{ secrets.DATABASE_URL_DEV }}
+            JWT_SECRET=${{ secrets.JWT_SECRET_DEV }}
+            
+      - name: 🔍 Health check
+        run: |
+          sleep 30
+          curl -f ${{ secrets.APP_URL_DEV }}/api/health || exit 1
+          
+      - name: 📧 Notify team
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+  # ============= DEPLOY STAGING =============
+  deploy-staging:
+    name: 🎭 Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/staging' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment: staging
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-files
+          
+      - name: 🚀 Deploy to Railway (Staging)
+        uses: railway-deploy/railway-deploy@v0.1.4
+        with:
+          api_token: ${{ secrets.RAILWAY_TOKEN_STAGING }}
+          service_id: ${{ secrets.RAILWAY_SERVICE_ID_STAGING }}
+          environment_variables: |
+            NODE_ENV=staging
+            DATABASE_URL=${{ secrets.DATABASE_URL_STAGING }}
+            JWT_SECRET=${{ secrets.JWT_SECRET_STAGING }}
+            
+      - name: 🔍 Health check
+        run: |
+          sleep 30
+          curl -f ${{ secrets.APP_URL_STAGING }}/api/health || exit 1
+          
+      - name: 🧪 Run smoke tests
+        run: |
+          npx newman run tests/postman/smoke-tests.json \
+            --env-var "base_url=${{ secrets.APP_URL_STAGING }}" \
+            --reporters cli,json \
+            --reporter-json-export newman-results.json
+            
+      - name: 📧 Notify team
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+
+  # ============= DEPLOY PRODUCTION =============
+  deploy-production:
+    name: 🌟 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: [build, security]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment: production
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 📦 Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-files
+          
+      - name: 🚀 Deploy to Railway (Production)
+        uses: railway-deploy/railway-deploy@v0.1.4
+        with:
+          api_token: ${{ secrets.RAILWAY_TOKEN_PROD }}
+          service_id: ${{ secrets.RAILWAY_SERVICE_ID_PROD }}
+          environment_variables: |
+            NODE_ENV=production
+            DATABASE_URL=${{ secrets.DATABASE_URL_PROD }}
+            JWT_SECRET=${{ secrets.JWT_SECRET_PROD }}
+            META_WHATSAPP_TOKEN=${{ secrets.META_WHATSAPP_TOKEN }}
+            META_WHATSAPP_PHONE_ID=${{ secrets.META_WHATSAPP_PHONE_ID }}
+            WHATSAPP_VERIFY_TOKEN=${{ secrets.WHATSAPP_VERIFY_TOKEN }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            PINECONE_API_KEY=${{ secrets.PINECONE_API_KEY }}
+            PINECONE_ENV=${{ secrets.PINECONE_ENV }}
+            PINECONE_INDEX=${{ secrets.PINECONE_INDEX }}
+            
+      - name: 🔍 Health check
+        run: |
+          sleep 30
+          curl -f ${{ secrets.APP_URL_PROD }}/api/health || exit 1
+          
+      - name: 🧪 Run full test suite
+        run: |
+          npx newman run tests/postman/full-tests.json \
+            --env-var "base_url=${{ secrets.APP_URL_PROD }}" \
+            --reporters cli,json \
+            --reporter-json-export newman-results.json
+            
+      - name: 📊 Create GitHub Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          body: |
+            ## 🚀 Production Release v${{ github.run_number }}
+            
+            **Deployed:** ${{ github.event.head_commit.timestamp }}
+            **Commit:** ${{ github.sha }}
+            **Author:** ${{ github.actor }}
+            
+            ### Changes
+            ${{ github.event.head_commit.message }}
+            
+            ### Environment
+            - **URL:** ${{ secrets.APP_URL_PROD }}
+            - **Health Check:** ${{ secrets.APP_URL_PROD }}/api/health
+            
+          draft: false
+          prerelease: false
+          
+      - name: 📧 Notify team - Success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            🎉 *PRODUCTION DEPLOYMENT SUCCESSFUL!* 🎉
+            
+            🔗 **App URL:** ${{ secrets.APP_URL_PROD }}
+            📋 **Release:** v${{ github.run_number }}
+            👤 **Deployed by:** ${{ github.actor }}
+            
+      - name: 📧 Notify team - Failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#critical'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          text: |
+            🚨 *PRODUCTION DEPLOYMENT FAILED!* 🚨
+            
+            ❌ **Status:** Failed
+            👤 **Author:** ${{ github.actor }}
+            🔧 **Action Required:** Immediate attention needed!
