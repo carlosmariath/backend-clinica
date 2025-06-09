@@ -1,0 +1,37 @@
+# Development environment values
+replicaCount: 1
+
+image:
+  tag: "dev"
+
+config:
+  nodeEnv: development
+  logLevel: debug
+
+ingress:
+  annotations:
+    appgw.ingress.kubernetes.io/ssl-redirect: "false"  # HTTPS opcional em dev
+  hosts:
+    - host: api-dev.clinica.com
+      paths:
+        - path: /
+          pathType: Prefix
+
+resources:
+  limits:
+    cpu: 300m
+    memory: 512Mi
+  requests:
+    cpu: 100m
+    memory: 256Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 80
+
+# Dev-specific secrets (these should be overridden via --set flags)
+secrets:
+  databaseUrl: "postgresql://dev-user:dev-pass@dev-postgres:5432/clinica-dev"
+  jwtSecret: "dev-jwt-secret"

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "backend-clinica.fullname" . }}-config
+  labels:
+    {{- include "backend-clinica.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  PORT: {{ .Values.config.port | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  CONTEXT_PROMPT: {{ .Values.config.contextPrompt | quote }}

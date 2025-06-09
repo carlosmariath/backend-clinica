@@ -1,0 +1,43 @@
+# Production environment values
+replicaCount: 3
+
+image:
+  tag: "latest"
+
+config:
+  nodeEnv: production
+  logLevel: info
+
+ingress:
+  annotations:
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"  # HTTPS obrigatório
+    appgw.ingress.kubernetes.io/appgw-ssl-certificate: "clinica-ssl-cert"
+  hosts:
+    - host: api.clinica.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: clinica-tls-secret
+      hosts:
+        - api.clinica.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# Production-specific secrets (these should be overridden via --set flags)
+secrets:
+  databaseUrl: "postgresql://prod-user:prod-pass@prod-postgres:5432/clinica-prod"
+  jwtSecret: "prod-jwt-secret"

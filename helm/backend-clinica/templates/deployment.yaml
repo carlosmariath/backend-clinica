@@ -1,0 +1,102 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "backend-clinica.fullname" . }}
+  labels:
+    {{- include "backend-clinica.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "backend-clinica.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "backend-clinica.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "backend-clinica.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.initContainer.enabled }}
+      initContainers:
+      - name: migration
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        command: ["npx", "prisma", "migrate", "deploy"]
+        envFrom:
+        - configMapRef:
+            name: {{ include "backend-clinica.fullname" . }}-config
+        - secretRef:
+            name: {{ include "backend-clinica.fullname" . }}-secrets
+        resources:
+          {{- toYaml .Values.initContainer.resources | nindent 10 }}
+      {{- end }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.config.port }}
+              protocol: TCP
+          envFrom:
+          - configMapRef:
+              name: {{ include "backend-clinica.fullname" . }}-config
+          - secretRef:
+              name: {{ include "backend-clinica.fullname" . }}-secrets
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          {{- if or .Values.volumes.tmp.enabled .Values.volumes.logs.enabled }}
+          volumeMounts:
+          {{- if .Values.volumes.tmp.enabled }}
+          - name: tmp
+            mountPath: /tmp
+          {{- end }}
+          {{- if .Values.volumes.logs.enabled }}
+          - name: logs
+            mountPath: /app/logs
+          {{- end }}
+          {{- end }}
+      {{- if or .Values.volumes.tmp.enabled .Values.volumes.logs.enabled }}
+      volumes:
+      {{- if .Values.volumes.tmp.enabled }}
+      - name: tmp
+        emptyDir: {}
+      {{- end }}
+      {{- if .Values.volumes.logs.enabled }}
+      - name: logs
+        emptyDir: {}
+      {{- end }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,382 @@
+name: 📊 AKS Monitoring & Health Check
+
+on:
+  schedule:
+    # Verificações a cada hora
+    - cron: '0 * * * *'
+    # Relatório diário às 9:00 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente para monitorar'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+        - dev
+        - prod
+        - both
+
+jobs:
+  # ============= HEALTH CHECK KUBERNETES =============
+  k8s-health-check:
+    name: 🔍 Kubernetes Health Check
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        environment: 
+          - name: dev
+            namespace: clinica-dev
+            url: https://api-dev.clinica.com
+          - name: prod
+            namespace: clinica-prod
+            url: https://api.clinica.com
+    
+    steps:
+      - name: 🔐 Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: 🔧 Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: 🔐 Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ secrets.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+            
+      - name: 🔍 Check pod status
+        id: pod-check
+        run: |
+          echo "Checking pods in namespace: ${{ matrix.environment.namespace }}"
+          
+          # Verificar se namespace existe
+          if ! kubectl get namespace ${{ matrix.environment.namespace }} &>/dev/null; then
+            echo "❌ Namespace ${{ matrix.environment.namespace }} not found"
+            echo "status=namespace-missing" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Verificar pods
+          pods=$(kubectl get pods -n ${{ matrix.environment.namespace }} \
+            -l app=backend-clinica \
+            --no-headers)
+          
+          if [ -z "$pods" ]; then
+            echo "❌ No pods found for backend-clinica"
+            echo "status=no-pods" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+          
+          # Verificar se todos os pods estão rodando
+          not_ready=$(kubectl get pods -n ${{ matrix.environment.namespace }} \
+            -l app=backend-clinica \
+            --field-selector=status.phase!=Running \
+            --no-headers | wc -l)
+          
+          if [ "$not_ready" -gt 0 ]; then
+            echo "❌ $not_ready pods not running"
+            echo "status=pods-not-ready" >> $GITHUB_OUTPUT
+            kubectl get pods -n ${{ matrix.environment.namespace }} -l app=backend-clinica
+            exit 1
+          fi
+          
+          echo "✅ All pods are running"
+          echo "status=healthy" >> $GITHUB_OUTPUT
+          
+      - name: 🔍 Check service endpoints
+        run: |
+          echo "Checking service endpoints..."
+          
+          # Verificar se service existe
+          if ! kubectl get service -n ${{ matrix.environment.namespace }} \
+            ${{ matrix.environment.name }}-backend-clinica-service &>/dev/null; then
+            echo "❌ Service not found"
+            exit 1
+          fi
+          
+          # Verificar endpoints
+          endpoints=$(kubectl get endpoints -n ${{ matrix.environment.namespace }} \
+            ${{ matrix.environment.name }}-backend-clinica-service \
+            -o jsonpath='{.subsets[*].addresses[*].ip}')
+          
+          if [ -z "$endpoints" ]; then
+            echo "❌ No endpoints available"
+            exit 1
+          fi
+          
+          echo "✅ Service endpoints: $endpoints"
+          
+      - name: 🔍 Application health check
+        run: |
+          echo "Testing application health via port-forward..."
+          
+          # Port-forward temporário
+          kubectl port-forward \
+            service/${{ matrix.environment.name }}-backend-clinica-service \
+            8080:80 \
+            --namespace=${{ matrix.environment.namespace }} &
+          
+          sleep 10
+          
+          # Health check
+          if curl -f http://localhost:8080/api/health; then
+            echo "✅ Application health check passed"
+          else
+            echo "❌ Application health check failed"
+            exit 1
+          fi
+          
+      - name: 📊 Resource usage check
+        run: |
+          echo "## 📊 Resource Usage - ${{ matrix.environment.name }}" >> $GITHUB_STEP_SUMMARY
+          
+          # CPU e Memory usage
+          kubectl top pods -n ${{ matrix.environment.namespace }} \
+            -l app=backend-clinica >> $GITHUB_STEP_SUMMARY || echo "Metrics not available" >> $GITHUB_STEP_SUMMARY
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Pod Details" >> $GITHUB_STEP_SUMMARY
+          kubectl get pods -n ${{ matrix.environment.namespace }} \
+            -l app=backend-clinica \
+            -o wide >> $GITHUB_STEP_SUMMARY
+          
+      - name: 📧 Alert on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#alerts'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: |
+            🚨 **KUBERNETES HEALTH CHECK FAILURE** 🚨
+            
+            **Environment:** ${{ matrix.environment.name }}
+            **Namespace:** ${{ matrix.environment.namespace }}
+            **Status:** ${{ steps.pod-check.outputs.status }}
+            **URL:** ${{ matrix.environment.url }}
+            
+            **Action Required:** Check AKS cluster status!
+
+  # ============= CLUSTER MONITORING =============
+  cluster-monitoring:
+    name: 🏗️ Cluster Monitoring
+    runs-on: ubuntu-latest
+    if: github.event.schedule == '0 9 * * *' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: 🔐 Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: 🔧 Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: 🔐 Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ secrets.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+            
+      - name: 📊 Cluster status overview
+        run: |
+          echo "## 🏗️ AKS Cluster Status" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** ${{ secrets.AKS_CLUSTER_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Resource Group:** ${{ secrets.AZURE_RESOURCE_GROUP }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Node status
+          echo "### 🖥️ Node Status" >> $GITHUB_STEP_SUMMARY
+          kubectl get nodes -o wide >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Namespace status
+          echo "### 📁 Namespaces" >> $GITHUB_STEP_SUMMARY
+          kubectl get namespaces | grep clinica >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+      - name: 📊 Resource utilization
+        run: |
+          echo "### 📊 Resource Utilization" >> $GITHUB_STEP_SUMMARY
+          
+          # Node metrics
+          kubectl top nodes >> $GITHUB_STEP_SUMMARY || echo "Node metrics not available" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Pod metrics por namespace
+          echo "#### Development Environment" >> $GITHUB_STEP_SUMMARY
+          kubectl top pods -n clinica-dev >> $GITHUB_STEP_SUMMARY || echo "Dev metrics not available" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "#### Production Environment" >> $GITHUB_STEP_SUMMARY
+          kubectl top pods -n clinica-prod >> $GITHUB_STEP_SUMMARY || echo "Prod metrics not available" >> $GITHUB_STEP_SUMMARY
+          
+      - name: 🔍 Check HPA status
+        run: |
+          echo "### ⚖️ Horizontal Pod Autoscaler Status" >> $GITHUB_STEP_SUMMARY
+          
+          # HPA Dev
+          echo "#### Development HPA" >> $GITHUB_STEP_SUMMARY
+          kubectl get hpa -n clinica-dev >> $GITHUB_STEP_SUMMARY || echo "No HPA in dev" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # HPA Prod
+          echo "#### Production HPA" >> $GITHUB_STEP_SUMMARY
+          kubectl get hpa -n clinica-prod >> $GITHUB_STEP_SUMMARY || echo "No HPA in prod" >> $GITHUB_STEP_SUMMARY
+          
+      - name: 🚨 Check for issues
+        run: |
+          echo "### 🚨 Issues Detection" >> $GITHUB_STEP_SUMMARY
+          
+          # Pods com problemas
+          problem_pods=$(kubectl get pods --all-namespaces \
+            --field-selector=status.phase!=Running,status.phase!=Succeeded \
+            --no-headers | wc -l)
+          
+          if [ "$problem_pods" -gt 0 ]; then
+            echo "⚠️ **$problem_pods pods with issues found:**" >> $GITHUB_STEP_SUMMARY
+            kubectl get pods --all-namespaces \
+              --field-selector=status.phase!=Running,status.phase!=Succeeded >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ All pods are healthy" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Events recentes
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "#### Recent Events" >> $GITHUB_STEP_SUMMARY
+          kubectl get events --all-namespaces \
+            --sort-by='.lastTimestamp' \
+            --field-selector type=Warning \
+            | tail -10 >> $GITHUB_STEP_SUMMARY || echo "No recent warnings" >> $GITHUB_STEP_SUMMARY
+
+  # ============= INGRESS MONITORING =============
+  ingress-monitoring:
+    name: 🌐 Ingress & DNS Monitoring
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        environment: 
+          - name: dev
+            url: https://api-dev.clinica.com
+          - name: prod
+            url: https://api.clinica.com
+    
+    steps:
+      - name: 🌐 DNS resolution check
+        run: |
+          echo "Testing DNS resolution for ${{ matrix.environment.url }}"
+          
+          # Extrair hostname
+          hostname=$(echo ${{ matrix.environment.url }} | sed 's/https\?:\/\///')
+          
+          # DNS lookup
+          if nslookup $hostname; then
+            echo "✅ DNS resolution successful"
+          else
+            echo "❌ DNS resolution failed"
+            exit 1
+          fi
+          
+      - name: 🔒 SSL certificate check
+        run: |
+          echo "Checking SSL certificate..."
+          
+          hostname=$(echo ${{ matrix.environment.url }} | sed 's/https\?:\/\///')
+          
+          # SSL check
+          echo | openssl s_client -servername $hostname -connect $hostname:443 2>/dev/null | \
+            openssl x509 -noout -dates
+          
+      - name: 🌐 HTTP response check
+        run: |
+          echo "Testing HTTP response..."
+          
+          # Health endpoint
+          response=$(curl -s -w "%{http_code}" ${{ matrix.environment.url }}/api/health)
+          http_code="${response: -3}"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ Health endpoint responding (HTTP $http_code)"
+          else
+            echo "❌ Health endpoint failed (HTTP $http_code)"
+            exit 1
+          fi
+          
+          # API root endpoint
+          response=$(curl -s -w "%{http_code}" ${{ matrix.environment.url }}/api)
+          http_code="${response: -3}"
+          
+          if [ "$http_code" -eq 200 ]; then
+            echo "✅ API root responding (HTTP $http_code)"
+          else
+            echo "❌ API root failed (HTTP $http_code)"
+          fi
+          
+      - name: 📧 Alert on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#alerts'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: |
+            🌐 **INGRESS/DNS MONITORING FAILURE** 🌐
+            
+            **Environment:** ${{ matrix.environment.name }}
+            **URL:** ${{ matrix.environment.url }}
+            
+            Check DNS, SSL certificates, and ingress configuration!
+
+  # ============= DAILY REPORT =============
+  daily-report:
+    name: 📋 Daily AKS Report
+    runs-on: ubuntu-latest
+    needs: [k8s-health-check, cluster-monitoring, ingress-monitoring]
+    if: github.event.schedule == '0 9 * * *' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: 📋 Generate daily report
+        run: |
+          echo "# 📊 Daily AKS Health Report" >> $GITHUB_STEP_SUMMARY
+          echo "**Report Date:** $(date +%Y-%m-%d)" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** ${{ secrets.AKS_CLUSTER_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "## 🟢 Environment Status" >> $GITHUB_STEP_SUMMARY
+          echo "- **Development:** ${{ needs.k8s-health-check.result == 'success' && '✅ Healthy' || '❌ Issues Detected' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Production:** ${{ needs.k8s-health-check.result == 'success' && '✅ Healthy' || '❌ Issues Detected' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Cluster:** ${{ needs.cluster-monitoring.result == 'success' && '✅ Healthy' || '❌ Issues Detected' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Ingress:** ${{ needs.ingress-monitoring.result == 'success' && '✅ Healthy' || '❌ Issues Detected' }}" >> $GITHUB_STEP_SUMMARY
+          
+      - name: 📧 Send daily report
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          channel: '#daily-reports'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: |
+            📊 **Daily AKS Health Report - $(date +%Y-%m-%d)**
+            
+            **Cluster:** ${{ secrets.AKS_CLUSTER_NAME }}
+            
+            🟢 **Environment Status:**
+            • Dev: ${{ needs.k8s-health-check.result == 'success' && '✅ Healthy' || '❌ Issues' }}
+            • Prod: ${{ needs.k8s-health-check.result == 'success' && '✅ Healthy' || '❌ Issues' }}
+            • Cluster: ${{ needs.cluster-monitoring.result == 'success' && '✅ Healthy' || '❌ Issues' }}
+            • Ingress: ${{ needs.ingress-monitoring.result == 'success' && '✅ Healthy' || '❌ Issues' }}
+            
+            ${{ needs.k8s-health-check.result != 'success' && '⚠️ **Action Required:** Check workflow details' || '✅ All systems operational!' }}
+            
+            View full report: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

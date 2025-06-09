@@ -1,0 +1,137 @@
+# Default values for backend-clinica.
+# This is a YAML-formatted file.
+
+replicaCount: 2
+
+image:
+  repository: your-acr.azurecr.io/backend-clinica
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+podAnnotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1001
+  runAsGroup: 1001
+  fsGroup: 1001
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+    - ALL
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 3000
+
+ingress:
+  enabled: true
+  className: "azure/application-gateway"
+  annotations:
+    appgw.ingress.kubernetes.io/ssl-redirect: "true"
+    appgw.ingress.kubernetes.io/connection-draining: "true"
+    appgw.ingress.kubernetes.io/connection-draining-timeout: "30"
+    appgw.ingress.kubernetes.io/cookie-based-affinity: "false"
+    appgw.ingress.kubernetes.io/request-timeout: "30"
+    appgw.ingress.kubernetes.io/backend-path-prefix: "/"
+  hosts:
+    - host: api.clinica.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: clinica-tls-secret
+      hosts:
+        - api.clinica.com
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 1Gi
+  requests:
+    cpu: 200m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}
+
+# Application Configuration
+config:
+  nodeEnv: production
+  port: 3000
+  logLevel: info
+  contextPrompt: |
+    Você é um assistente virtual para uma clínica de massagens e terapias. 
+    Seu nome é ZenBot, e sua função é ajudar clientes a agendarem sessões, responder dúvidas sobre os serviços oferecidos e fornecer informações sobre horários disponíveis.
+
+# Secrets Configuration
+secrets:
+  databaseUrl: ""
+  jwtSecret: ""
+  metaWhatsappToken: ""
+  metaWhatsappPhoneId: ""
+  whatsappVerifyToken: ""
+  openaiApiKey: ""
+  pineconeApiKey: ""
+  pineconeEnv: "us-east-1"
+  pineconeIndex: "clinica"
+
+# Health checks
+livenessProbe:
+  httpGet:
+    path: /api/health
+    port: 3000
+  initialDelaySeconds: 30
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /api/health
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# Init container for migrations
+initContainer:
+  enabled: true
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+    limits:
+      memory: "512Mi"
+      cpu: "200m"
+
+# Volume mounts
+volumes:
+  tmp:
+    enabled: true
+  logs:
+    enabled: true

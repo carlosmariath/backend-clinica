@@ -1,0 +1,28 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: clinica-prod
+
+resources:
+- ../base/namespace.yaml
+- ../base/configmap.yaml
+- ../base/secret.yaml
+- ../base/deployment.yaml
+- ../base/service.yaml
+- ../base/ingress.yaml
+- ../base/hpa.yaml
+
+patchesStrategicMerge:
+- deployment-patch.yaml
+- ingress-patch.yaml
+- configmap-patch.yaml
+
+images:
+- name: backend-clinica
+  newTag: prod
+
+commonLabels:
+  environment: production
+  version: prod
+
+namePrefix: prod-

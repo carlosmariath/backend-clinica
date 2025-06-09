@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-clinica
+spec:
+  replicas: 1  # Menos réplicas em dev
+  template:
+    spec:
+      containers:
+      - name: backend-clinica
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "300m"
+        env:
+        - name: NODE_ENV
+          value: "development"
+        - name: LOG_LEVEL
+          value: "debug"

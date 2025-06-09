@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-clinica-config
+data:
+  NODE_ENV: "development"
+  LOG_LEVEL: "debug"
