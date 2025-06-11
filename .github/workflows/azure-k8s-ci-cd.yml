@@ -2,90 +2,397 @@ name: 🚀 Azure AKS CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, master, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Ambiente para deploy manual'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+        - dev
+        - prod
 
 env:
-  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
-  ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-  ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.ACR_NAME }}
   IMAGE_NAME: backend-clinica
+  NODE_VERSION: '20'
 
 jobs:
-  build-and-deploy:
+  # ============= LINT E TESTES =============
+  lint-and-test:
+    name: 🔍 Lint & Test
     runs-on: ubuntu-latest
     
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_USER: testuser
+          POSTGRES_DB: testdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        creds: |
-          {
-            "clientId": "${{ secrets.AZURE_CLIENT_ID }}",
-            "clientSecret": "${{ secrets.AZURE_CLIENT_SECRET }}",
-            "subscriptionId": "${{ secrets.AZURE_SUBSCRIPTION_ID }}",
-            "tenantId": "${{ secrets.AZURE_TENANT_ID }}"
-          }
-
-    - name: Build and push Docker image
-      run: |
-        # Login no ACR
-        echo ${{ secrets.ACR_PASSWORD }} | docker login ${{ secrets.ACR_LOGIN_SERVER }} -u ${{ secrets.ACR_USERNAME }} --password-stdin
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
         
-        # Build da imagem
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }} .
-        docker build -t ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest .
+      - name: 📦 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          
+      - name: 📥 Install dependencies
+        run: npm ci
         
-        # Push da imagem
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-        docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-
-    - name: Set AKS context
-      uses: azure/aks-set-context@v3
-      with:
-        resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
-        cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
-
-    - name: Create namespace if not exists
-      run: |
-        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-          NAMESPACE="prod"
-        else
-          NAMESPACE="dev"
-        fi
-        kubectl create namespace $NAMESPACE --dry-run=client -o yaml | kubectl apply -f -
-
-    - name: Create database secret
-      run: |
-        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-          NAMESPACE="prod"
-        else
-          NAMESPACE="dev"
-        fi
-        kubectl create secret generic db-secret \
-          --from-literal=DATABASE_URL="${{ secrets.DATABASE_URL }}" \
-          --namespace=$NAMESPACE \
-          --dry-run=client -o yaml | kubectl apply -f -
-
-    - name: Deploy to AKS
-      run: |
-        if [ "${{ github.ref }}" = "refs/heads/main" ]; then
-          NAMESPACE="prod"
-          REPLICAS="2"
-        else
-          NAMESPACE="dev"
-          REPLICAS="1"
-        fi
+      - name: 🔍 Run linting
+        run: npm run lint:check
         
-        # Substituir variáveis nos manifestos
-        sed -i "s|{{IMAGE}}|${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/deployment.yaml
-        sed -i "s|{{NAMESPACE}}|$NAMESPACE|g" k8s/deployment.yaml
-        sed -i "s|{{REPLICAS}}|$REPLICAS|g" k8s/deployment.yaml
-        sed -i "s|{{NAMESPACE}}|$NAMESPACE|g" k8s/service.yaml
+      - name: 💅 Check formatting
+        run: npm run format:check
         
-        # Aplicar manifestos
-        kubectl apply -f k8s/ -n $NAMESPACE
+      - name: 🏗️ Build application
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+          JWT_SECRET: test-secret-key-for-ci-cd-pipeline-testing
+        run: npm run build
+        
+      - name: 🗄️ Setup test database
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+        run: |
+          npx prisma migrate deploy
+          npm run seed
+          
+      - name: 🧪 Run tests
+        env:
+          DATABASE_URL: postgresql://testuser:testpassword@localhost:5432/testdb
+          JWT_SECRET: test-secret-key-for-ci-cd-pipeline-testing
+          NODE_ENV: test
+        run: |
+          npm run test:cov
+          npm run test:e2e
+          
+      - name: 📊 Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          file: ./coverage/lcov.info
+          flags: backend
+          name: backend-coverage
+        continue-on-error: true
+
+  # ============= BUILD E PUSH IMAGEM =============
+  build-and-push:
+    name: 🏗️ Build & Push Docker Image
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    if: github.event_name != 'pull_request'
+    
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 🔐 Login to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+          
+      - name: 🏷️ Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+            
+      - name: 🏗️ Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+      - name: 🔒 Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+        continue-on-error: true
+          
+      - name: 📊 Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results.sarif'
+        continue-on-error: true
+
+  # ============= DEPLOY DEVELOPMENT =============
+  deploy-dev:
+    name: 🔧 Deploy to Development
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/develop' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev')
+    environment: development
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 🔐 Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: 🔧 Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: 🔐 Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ secrets.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+            
+      - name: 🔧 Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+          
+      - name: 🗄️ Update database secrets
+        run: |
+          kubectl create secret generic dev-backend-clinica-secrets \
+            --from-literal=DATABASE_URL="${{ secrets.DATABASE_URL_DEV }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET_DEV }}" \
+            --from-literal=META_WHATSAPP_TOKEN="${{ secrets.META_WHATSAPP_TOKEN }}" \
+            --from-literal=OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            --from-literal=CONTEXT_PROMPT="${{ secrets.CONTEXT_PROMPT }}" \
+            --namespace=clinica-dev \
+            --dry-run=client -o yaml | kubectl apply -f -
+            
+      - name: 🔄 Update image tag
+        run: |
+          cd k8s/dev
+          kustomize edit set image backend-clinica=${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          
+      - name: 🚀 Deploy to AKS Dev
+        run: |
+          kustomize build k8s/dev | kubectl apply -f -
+          
+      - name: ⏳ Wait for deployment
+        run: |
+          kubectl rollout status deployment/dev-backend-clinica \
+            --namespace=clinica-dev \
+            --timeout=300s
+            
+      - name: 🔍 Health check
+        run: |
+          # Aguardar pods ficarem prontos
+          kubectl wait --for=condition=ready pod \
+            -l app=backend-clinica \
+            --namespace=clinica-dev \
+            --timeout=300s
+            
+          # Fazer port-forward temporário para teste
+          kubectl port-forward service/dev-backend-clinica-service 8080:80 \
+            --namespace=clinica-dev &
+          sleep 10
+          
+          # Teste de health
+          curl -f http://localhost:8080/api/health || exit 1
+          
+      - name: 📧 Notify success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: |
+            ✅ **DEV DEPLOYMENT SUCCESSFUL**
+            
+            **Environment:** Development
+            **Image:** ${{ github.sha }}
+            **URL:** https://api-dev.clinica.com
+            **Deployed by:** ${{ github.actor }}
+        continue-on-error: true
+
+  # ============= DEPLOY PRODUCTION =============
+  deploy-prod:
+    name: 🌟 Deploy to Production
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod')
+    environment: production
+    
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+        
+      - name: 🔐 Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: 🔧 Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: 'latest'
+          
+      - name: 🔐 Get AKS credentials
+        run: |
+          az aks get-credentials \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ secrets.AKS_CLUSTER_NAME }} \
+            --overwrite-existing
+            
+      - name: 🔧 Setup Kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+          
+      - name: 🗄️ Update database secrets
+        run: |
+          kubectl create secret generic prod-backend-clinica-secrets \
+            --from-literal=DATABASE_URL="${{ secrets.DATABASE_URL_PROD }}" \
+            --from-literal=JWT_SECRET="${{ secrets.JWT_SECRET_PROD }}" \
+            --from-literal=META_WHATSAPP_TOKEN="${{ secrets.META_WHATSAPP_TOKEN }}" \
+            --from-literal=META_WHATSAPP_PHONE_ID="${{ secrets.META_WHATSAPP_PHONE_ID }}" \
+            --from-literal=WHATSAPP_VERIFY_TOKEN="${{ secrets.WHATSAPP_VERIFY_TOKEN }}" \
+            --from-literal=OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            --from-literal=CONTEXT_PROMPT="${{ secrets.CONTEXT_PROMPT }}" \
+            --from-literal=PINECONE_API_KEY="${{ secrets.PINECONE_API_KEY }}" \
+            --from-literal=PINECONE_ENV="${{ secrets.PINECONE_ENV }}" \
+            --from-literal=PINECONE_INDEX="${{ secrets.PINECONE_INDEX }}" \
+            --namespace=clinica-prod \
+            --dry-run=client -o yaml | kubectl apply -f -
+            
+      - name: 🔄 Update image tag
+        run: |
+          cd k8s/prod
+          kustomize edit set image backend-clinica=${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          
+      - name: 🚀 Deploy to AKS Production
+        run: |
+          kustomize build k8s/prod | kubectl apply -f -
+          
+      - name: ⏳ Wait for deployment
+        run: |
+          kubectl rollout status deployment/prod-backend-clinica \
+            --namespace=clinica-prod \
+            --timeout=600s
+            
+      - name: 🔍 Health check
+        run: |
+          # Aguardar pods ficarem prontos
+          kubectl wait --for=condition=ready pod \
+            -l app=backend-clinica \
+            --namespace=clinica-prod \
+            --timeout=300s
+            
+          # Fazer port-forward temporário para teste
+          kubectl port-forward service/prod-backend-clinica-service 8080:80 \
+            --namespace=clinica-prod &
+          sleep 10
+          
+          # Teste de health
+          curl -f http://localhost:8080/api/health || exit 1
+          
+      - name: 🧪 Run smoke tests
+        run: |
+          # Testes básicos de endpoints
+          kubectl port-forward service/prod-backend-clinica-service 8080:80 \
+            --namespace=clinica-prod &
+          sleep 5
+          
+          # Teste endpoints críticos
+          curl -f http://localhost:8080/api || exit 1
+          curl -f http://localhost:8080/api/finance/categories || exit 1
+          
+      - name: 📊 Create GitHub Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: 🚀 Production Release v${{ github.run_number }}
+          body: |
+            ## 🚀 Production Release v${{ github.run_number }}
+            
+            **Deployed to:** Azure Kubernetes Service
+            **Image:** ${{ github.sha }}
+            **Namespace:** clinica-prod
+            **URL:** https://api.clinica.com
+            
+            ### Changes
+            ${{ github.event.head_commit.message }}
+            
+            ### Infrastructure
+            - **Container Registry:** ${{ secrets.ACR_LOGIN_SERVER }}
+            - **Kubernetes Cluster:** ${{ secrets.AKS_CLUSTER_NAME }}
+            - **Resource Group:** ${{ secrets.AZURE_RESOURCE_GROUP }}
+            
+          draft: false
+          prerelease: false
+          
+      - name: 📧 Notify success
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          channel: '#deployments'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: |
+            🎉 **PRODUCTION DEPLOYMENT SUCCESSFUL!** 🎉
+            
+            **Environment:** Production
+            **Image:** ${{ github.sha }}
+            **URL:** https://api.clinica.com
+            **Release:** v${{ github.run_number }}
+            **Deployed by:** ${{ github.actor }}
+            
+            🚀 Live and running on Azure AKS!
+        continue-on-error: true
+            
+      - name: 📧 Notify failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          channel: '#critical'
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
+          text: |
+            🚨 **PRODUCTION DEPLOYMENT FAILED!** 🚨
+            
+            **Environment:** Production
+            **Image:** ${{ github.sha }}
+            **Author:** ${{ github.actor }}
+            
+            🚨 **IMMEDIATE ROLLBACK MAY BE REQUIRED!** 🚨
+        continue-on-error: true

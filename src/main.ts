@@ -15,7 +15,10 @@ async function bootstrap() {
     configService.validateConfig();
     configService.logConfiguration();
   } catch (error) {
-    console.error('❌ Configuration validation failed:', error.message);
+    console.error(
+      '❌ Configuration validation failed:',
+      (error as Error).message,
+    );
     process.exit(1);
   }
 
