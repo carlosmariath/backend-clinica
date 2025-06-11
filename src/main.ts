@@ -2,28 +2,41 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { AppConfigService } from './config/config.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
-  // Configurar CORS para produção
+
+  // Get configuration service
+  const configService = app.get(AppConfigService);
+
+  // Validate configuration
+  try {
+    configService.validateConfig();
+    configService.logConfiguration();
+  } catch (error) {
+    console.error('❌ Configuration validation failed:', error.message);
+    process.exit(1);
+  }
+
+  // Configurar CORS
   app.enableCors({
-    origin: process.env.NODE_ENV === 'production' 
-      ? ['https://painel-clinica.vercel.app', 'https://your-frontend-domain.com'] 
-      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'],
+    origin: configService.corsOrigins,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
   });
 
   // Configurar validação global
-  app.useGlobalPipes(new ValidationPipe({
-    whitelist: true,
-    forbidNonWhitelisted: true,
-    transform: true,
-  }));
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      forbidNonWhitelisted: true,
+      transform: true,
+    }),
+  );
 
   // Configurar Swagger apenas em desenvolvimento
-  if (process.env.NODE_ENV !== 'production') {
+  if (configService.nodeEnv !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('API Clínica de Terapias')
       .setDescription('API para gestão de clínica de massagens e terapias')
@@ -35,13 +48,15 @@ async function bootstrap() {
   }
 
   app.setGlobalPrefix('api');
-  
-  // Railway usa a variável PORT
-  const port = process.env.PORT || 3000;
+
+  const port = configService.port;
   await app.listen(port, '0.0.0.0');
-  
+
   console.log(`🚀 Aplicação rodando na porta ${port}`);
-  console.log(`📚 Documentação disponível em: ${process.env.NODE_ENV !== 'production' ? `http://localhost:${port}/api/docs` : 'Desabilitada em produção'}`);
+  console.log(`🌍 Ambiente: ${configService.nodeEnv}`);
+  console.log(
+    `📚 Documentação: ${configService.nodeEnv !== 'production' ? `http://localhost:${port}/api/docs` : 'Desabilitada em produção'}`,
+  );
 }
 
 void bootstrap();

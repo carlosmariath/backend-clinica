@@ -1,11 +1,14 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import { AppConfigModule } from './config/config.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { TherapistsModule } from './therapists/therapists.module';
 import { AppointmentsModule } from './appointments/appointments.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
-import { ConfigModule } from '@nestjs/config';
 import { ChatModule } from './chat/chat.module';
 import { DashboardModule } from './dashboard/dashboard.module';
 import { KnowledgeModule } from './knowledge/knowledge.module';
@@ -17,7 +20,12 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ 
+      isGlobal: true,
+      envFilePath: ['.env.local', '.env'],
+      expandVariables: true,
+    }),
+    AppConfigModule,
     PrismaModule,
     UsersModule,
     AuthModule,
@@ -33,5 +41,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
     FinanceModule,
     SubscriptionsModule,
   ],
+  controllers: [AppController],
+  providers: [AppService],
 })
 export class AppModule {}

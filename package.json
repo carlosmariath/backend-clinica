@@ -25,7 +25,9 @@
     "postbuild": "npx prisma migrate deploy",
     "start": "node dist/src/main.js",
     "seed": "ts-node prisma/seed.ts",
-    "seed:financial": "ts-node scripts/seed-financial-categories.ts"
+    "seed:financial": "ts-node scripts/seed-financial-categories.ts",
+    "check:env": "node scripts/check-env.js",
+    "dev:check": "npm run check:env && npm run start:dev"
   },
   "dependencies": {
     "@nestjs/axios": "^4.0.0",
