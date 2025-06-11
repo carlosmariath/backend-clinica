@@ -52,4 +52,4 @@ export interface Subscription {
   updatedAt: Date;
   plan?: TherapyPlan;
   client?: any; // Definição simplificada
-} 
+}

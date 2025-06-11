@@ -112,13 +112,17 @@ export class AppointmentsController {
     @Req() req: RequestWithUser,
     @Query('branchId') branchId?: string,
     @Query('page') page?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
   ) {
     const effectiveBranchId = branchId || req.user.branchId;
     const pageNum = parseInt(page || '1', 10);
     const limitNum = parseInt(limit || '20', 10);
 
-    return this.appointmentsService.findAll(effectiveBranchId, pageNum, limitNum);
+    return this.appointmentsService.findAll(
+      effectiveBranchId,
+      pageNum,
+      limitNum,
+    );
   }
 
   @Put(':id')
@@ -209,12 +213,20 @@ export class AppointmentsController {
   @Roles('ADMIN', 'RECEPTIONIST')
   @ApiOperation({ summary: 'Cancelar um agendamento' })
   @ApiParam({ name: 'id', description: 'ID do agendamento' })
-  @ApiQuery({ name: 'applyNoShowFee', required: false, description: 'Aplicar taxa de no-show', type: 'boolean' })
+  @ApiQuery({
+    name: 'applyNoShowFee',
+    required: false,
+    description: 'Aplicar taxa de no-show',
+    type: 'boolean',
+  })
   cancelAppointment(
     @Param('id') id: string,
     @Query('applyNoShowFee') applyNoShowFee?: string,
   ) {
-    return this.appointmentsService.cancelAppointment(id, applyNoShowFee === 'true');
+    return this.appointmentsService.cancelAppointment(
+      id,
+      applyNoShowFee === 'true',
+    );
   }
 
   @Patch(':id/reschedule')
@@ -228,6 +240,11 @@ export class AppointmentsController {
     @Body('startTime') startTime: string,
     @Body('endTime') endTime: string,
   ) {
-    return this.appointmentsService.rescheduleAppointment(id, date, startTime, endTime);
+    return this.appointmentsService.rescheduleAppointment(
+      id,
+      date,
+      startTime,
+      endTime,
+    );
   }
 }

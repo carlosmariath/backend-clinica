@@ -10,7 +10,10 @@ export class SubscriptionDto {
   @ApiProperty({ description: 'ID do plano de terapia associado à assinatura' })
   therapyPlanId: string;
 
-  @ApiProperty({ description: 'ID da filial onde a assinatura foi criada', required: false })
+  @ApiProperty({
+    description: 'ID da filial onde a assinatura foi criada',
+    required: false,
+  })
   branchId?: string;
 
   @ApiProperty({ description: 'Data de início da assinatura' })
@@ -19,7 +22,10 @@ export class SubscriptionDto {
   @ApiProperty({ description: 'Data de término da assinatura' })
   endDate: Date;
 
-  @ApiProperty({ description: 'Status da assinatura', enum: ['ACTIVE', 'PENDING', 'EXPIRED', 'CANCELED'] })
+  @ApiProperty({
+    description: 'Status da assinatura',
+    enum: ['ACTIVE', 'PENDING', 'EXPIRED', 'CANCELED'],
+  })
   status: 'ACTIVE' | 'PENDING' | 'EXPIRED' | 'CANCELED';
 
   @ApiProperty({ description: 'Número total de sessões do plano' })
@@ -33,4 +39,4 @@ export class SubscriptionDto {
 
   @ApiProperty({ description: 'Data da última atualização do registro' })
   updatedAt: Date;
-} 
+}

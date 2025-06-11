@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
 import { UpdateTransactionDto } from './dto/update-transaction.dto';
@@ -11,7 +15,7 @@ import { Prisma } from '@prisma/client';
 // Enum para tipos de transação financeira
 enum TransactionType {
   REVENUE = 'REVENUE', // Receitas
-  EXPENSE = 'EXPENSE'  // Despesas
+  EXPENSE = 'EXPENSE', // Despesas
 }
 
 @Injectable()
@@ -168,7 +172,10 @@ export class FinanceService {
     return transaction;
   }
 
-  async updateTransaction(id: string, updateTransactionDto: UpdateTransactionDto) {
+  async updateTransaction(
+    id: string,
+    updateTransactionDto: UpdateTransactionDto,
+  ) {
     // Verificar se a transação existe
     await this.findTransactionById(id);
 
@@ -185,7 +192,10 @@ export class FinanceService {
       }
 
       // Se está tentando alterar o tipo, verificar compatibilidade com a categoria
-      if (updateTransactionDto.type && category.type !== updateTransactionDto.type) {
+      if (
+        updateTransactionDto.type &&
+        category.type !== updateTransactionDto.type
+      ) {
         throw new BadRequestException(
           `O tipo da transação (${updateTransactionDto.type}) não corresponde ao tipo da categoria (${category.type})`,
         );
@@ -291,13 +301,18 @@ export class FinanceService {
     });
 
     if (!category) {
-      throw new NotFoundException(`Categoria financeira com ID ${id} não encontrada`);
+      throw new NotFoundException(
+        `Categoria financeira com ID ${id} não encontrada`,
+      );
     }
 
     return category;
   }
 
-  async updateCategory(id: string, updateCategoryDto: UpdateFinanceCategoryDto) {
+  async updateCategory(
+    id: string,
+    updateCategoryDto: UpdateFinanceCategoryDto,
+  ) {
     // Verificar se a categoria existe
     await this.findCategoryById(id);
 
@@ -387,13 +402,18 @@ export class FinanceService {
     });
 
     if (!method) {
-      throw new NotFoundException(`Método de pagamento com ID ${id} não encontrado`);
+      throw new NotFoundException(
+        `Método de pagamento com ID ${id} não encontrado`,
+      );
     }
 
     return method;
   }
 
-  async updatePaymentMethod(id: string, updateMethodDto: UpdatePaymentMethodDto) {
+  async updatePaymentMethod(
+    id: string,
+    updateMethodDto: UpdatePaymentMethodDto,
+  ) {
     // Verificar se o método existe
     await this.findPaymentMethodById(id);
 
@@ -484,34 +504,35 @@ export class FinanceService {
 
     // Calcular totais de receitas e despesas
     const totalRevenue = transactions
-      .filter(t => t.type === TransactionType.REVENUE)
+      .filter((t) => t.type === TransactionType.REVENUE)
       .reduce((sum, t) => sum + t.amount, 0);
 
     const totalExpense = transactions
-      .filter(t => t.type === TransactionType.EXPENSE)
+      .filter((t) => t.type === TransactionType.EXPENSE)
       .reduce((sum, t) => sum + t.amount, 0);
 
     const balance = totalRevenue - totalExpense;
 
     // Agrupar transações por categoria
     const byCategory = transactions.reduce((acc: any, transaction) => {
-      const categoryName = transaction.financeCategory?.name || transaction.category;
+      const categoryName =
+        transaction.financeCategory?.name || transaction.category;
       const type = transaction.type;
-      
+
       if (!acc[type]) {
         acc[type] = {};
       }
-      
+
       if (!acc[type][categoryName]) {
         acc[type][categoryName] = {
           total: 0,
           count: 0,
         };
       }
-      
+
       acc[type][categoryName].total += transaction.amount;
       acc[type][categoryName].count += 1;
-      
+
       return acc;
     }, {});
 
@@ -528,4 +549,4 @@ export class FinanceService {
       },
     };
   }
-} 
+}

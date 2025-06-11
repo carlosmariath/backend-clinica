@@ -19,7 +19,7 @@ export class TherapyPlanService {
   private mapTherapyPlanToDto(plan: any): TherapyPlanDto {
     // Criar array de branches a partir de branchLinks (TherapyPlanBranch) ou do campo branches
     const branchesData: BranchDto[] = [];
-    
+
     // Usar branchLinks se disponível
     if (
       plan.branchLinks &&
@@ -39,8 +39,8 @@ export class TherapyPlanService {
     }
     // Ou usar campo virtual branches se disponível
     else if (
-      plan.branches && 
-      Array.isArray(plan.branches) && 
+      plan.branches &&
+      Array.isArray(plan.branches) &&
       plan.branches.length > 0
     ) {
       plan.branches.forEach((branch: any) => {
@@ -185,7 +185,7 @@ export class TherapyPlanService {
           JOIN "TherapyPlanBranch" tpb ON tp.id = tpb."therapyPlanId"
           WHERE tpb."branchId" = ${branchId}
         `;
-        
+
         plans = Array.isArray(result) ? result : [];
       } else {
         // Buscar todos os planos com suas filiais
@@ -195,9 +195,9 @@ export class TherapyPlanService {
           FROM "TherapyPlan" tp
           ORDER BY tp."createdAt" DESC
         `;
-        
+
         plans = Array.isArray(result) ? result : [];
-        
+
         // Para cada plano, buscar suas filiais
         for (const plan of plans) {
           const branches = await this.prisma.$queryRaw`
@@ -205,9 +205,9 @@ export class TherapyPlanService {
             JOIN "TherapyPlanBranch" tpb ON b.id = tpb."branchId"
             WHERE tpb."therapyPlanId" = ${plan.id}
           `;
-          
-          plan.branchLinks = Array.isArray(branches) 
-            ? branches.map((b: any) => ({ branch: b })) 
+
+          plan.branchLinks = Array.isArray(branches)
+            ? branches.map((b: any) => ({ branch: b }))
             : [];
         }
       }
@@ -249,15 +249,16 @@ export class TherapyPlanService {
       const subscriptionCount = await this.prisma.$queryRaw`
         SELECT COUNT(*) FROM "Subscription" s WHERE s."therapyPlanId" = ${id}
       `;
-      
-      therapyPlan.branchLinks = Array.isArray(branches) 
-        ? branches.map((b: any) => ({ branch: b })) 
+
+      therapyPlan.branchLinks = Array.isArray(branches)
+        ? branches.map((b: any) => ({ branch: b }))
         : [];
-      
-      therapyPlan._count = { 
-        subscriptions: Array.isArray(subscriptionCount) && subscriptionCount.length > 0
-          ? Number(subscriptionCount[0].count)
-          : 0
+
+      therapyPlan._count = {
+        subscriptions:
+          Array.isArray(subscriptionCount) && subscriptionCount.length > 0
+            ? Number(subscriptionCount[0].count)
+            : 0,
       };
 
       return this.mapTherapyPlanToDto(therapyPlan);
@@ -350,12 +351,16 @@ export class TherapyPlanService {
     await this.findOne(id);
 
     // Verificar se há assinaturas ativas para este plano
-          const activeSubscriptionsResult = await this.prisma.$queryRaw<Array<{count: string}>>`
+    const activeSubscriptionsResult = await this.prisma.$queryRaw<
+      Array<{ count: string }>
+    >`
       SELECT COUNT(*) FROM "Subscription"
       WHERE "therapyPlanId" = ${id} AND "status" = 'ACTIVE'
     `;
-    
-    const activeSubscriptions = Number(activeSubscriptionsResult[0]?.count || 0);
+
+    const activeSubscriptions = Number(
+      activeSubscriptionsResult[0]?.count || 0,
+    );
 
     if (activeSubscriptions > 0) {
       throw new BadRequestException(
@@ -408,10 +413,11 @@ export class TherapyPlanService {
         SELECT id FROM "TherapyPlanBranch"
         WHERE "therapyPlanId" = ${planId} AND "branchId" = ${branchId}
       `;
-      
-      const existingLink = Array.isArray(existingLinkResult) && existingLinkResult.length > 0
-        ? existingLinkResult[0]
-        : null;
+
+      const existingLink =
+        Array.isArray(existingLinkResult) && existingLinkResult.length > 0
+          ? existingLinkResult[0]
+          : null;
 
       if (existingLink) {
         throw new BadRequestException(
@@ -448,16 +454,17 @@ export class TherapyPlanService {
     try {
       // Buscar o plano com suas filiais
       const plan = await this.findOne(planId);
-      
+
       // Verificar se a associação existe
       const existingLinkResult = await this.prisma.$queryRaw`
         SELECT id FROM "TherapyPlanBranch"
         WHERE "therapyPlanId" = ${planId} AND "branchId" = ${branchId}
       `;
-      
-      const existingLink = Array.isArray(existingLinkResult) && existingLinkResult.length > 0
-        ? existingLinkResult[0]
-        : null;
+
+      const existingLink =
+        Array.isArray(existingLinkResult) && existingLinkResult.length > 0
+          ? existingLinkResult[0]
+          : null;
 
       if (!existingLink) {
         throw new BadRequestException(
@@ -489,4 +496,3 @@ export class TherapyPlanService {
     }
   }
 }
- 

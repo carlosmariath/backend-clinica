@@ -24,14 +24,14 @@ export class AppointmentsService {
   private getDayOfWeekFromDateString(dateString: string): number {
     // Parse manual da data para evitar problemas de timezone
     const [year, month, day] = dateString.split('-').map(Number);
-    
+
     // Criar data em UTC meia-noite
     const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // Meio-dia UTC para evitar edge cases
-    
+
     // Aplicar offset do timezone de São Paulo (-3 horas)
     const saoPauloOffset = -3 * 60; // -3 horas em minutos
     const saoPauloDate = new Date(date.getTime() + saoPauloOffset * 60 * 1000);
-    
+
     // Retorna 1-7 (Segunda-Domingo) - mesmo formato do therapists.service.ts
     return saoPauloDate.getUTCDay() + 1 == 8 ? 0 : saoPauloDate.getUTCDay() + 1;
   }
@@ -49,7 +49,17 @@ export class AppointmentsService {
   }) {
     console.log('createAppointment - Parâmetros recebidos:', params);
 
-    const { clientId, therapistId, serviceId, date, startTime, endTime, branchId, subscriptionId, notes } = params;
+    const {
+      clientId,
+      therapistId,
+      serviceId,
+      date,
+      startTime,
+      endTime,
+      branchId,
+      subscriptionId,
+      notes,
+    } = params;
 
     // 1. Verificar se o terapeuta tem schedule para o dia da semana e horário
     const dayOfWeek = this.getDayOfWeekFromDateString(date);
@@ -64,18 +74,26 @@ export class AppointmentsService {
       },
     });
 
-    console.log('createAppointment - Disponibilidade encontrada:', therapistAvailability);
+    console.log(
+      'createAppointment - Disponibilidade encontrada:',
+      therapistAvailability,
+    );
 
     if (!therapistAvailability) {
-      console.log('createAppointment - ERRO: Terapeuta não disponível neste horário');
-      
+      console.log(
+        'createAppointment - ERRO: Terapeuta não disponível neste horário',
+      );
+
       // Debug: listar todos os horários do terapeuta para debug
       const allSchedules = await this.prisma.schedule.findMany({
         where: { therapistId },
         select: { dayOfWeek: true, startTime: true, endTime: true },
       });
-      console.log('createAppointment - Todos os horários do terapeuta:', allSchedules);
-      
+      console.log(
+        'createAppointment - Todos os horários do terapeuta:',
+        allSchedules,
+      );
+
       throw new BadRequestException(
         'O terapeuta não está disponível neste horário.',
       );
@@ -105,18 +123,19 @@ export class AppointmentsService {
     }
 
     // 3. Verificar se já existe agendamento para o cliente nesse horário e data
-    const conflictingClientAppointment = await this.prisma.appointment.findFirst({
-      where: {
-        clientId,
-        date: this.parseDateString(date),
-        OR: [
-          {
-            startTime: { lte: endTime },
-            endTime: { gt: startTime },
-          },
-        ],
-      },
-    });
+    const conflictingClientAppointment =
+      await this.prisma.appointment.findFirst({
+        where: {
+          clientId,
+          date: this.parseDateString(date),
+          OR: [
+            {
+              startTime: { lte: endTime },
+              endTime: { gt: startTime },
+            },
+          ],
+        },
+      });
     if (conflictingClientAppointment) {
       throw new BadRequestException(
         'O cliente já possui um agendamento nesse horário.',
@@ -155,38 +174,42 @@ export class AppointmentsService {
       appointmentData.notes = notes;
     }
 
-    const appointment = await this.prisma.appointment.create({ 
+    const appointment = await this.prisma.appointment.create({
       data: appointmentData,
       include: {
         client: true,
         therapist: true,
         service: true,
         branch: true,
-      }
+      },
     });
 
     // 5. Se foi fornecido subscriptionId, tentar consumir uma sessão
     if (subscriptionId) {
       try {
-        const consumptionResult = await this.sessionConsumptionService.consumeSessionForAppointment(
-          subscriptionId,
-          appointment.id,
-          finalBranchId
-        );
-        
+        const consumptionResult =
+          await this.sessionConsumptionService.consumeSessionForAppointment(
+            subscriptionId,
+            appointment.id,
+            finalBranchId,
+          );
+
         console.log('createAppointment - Sessão consumida:', consumptionResult);
-        
+
         return {
           ...appointment,
           consumption: consumptionResult,
-          message: 'Agendamento criado e sessão consumida com sucesso'
+          message: 'Agendamento criado e sessão consumida com sucesso',
         };
       } catch (error) {
-        console.log('createAppointment - Erro ao consumir sessão:', error.message);
-        
+        console.log(
+          'createAppointment - Erro ao consumir sessão:',
+          error.message,
+        );
+
         return {
           ...appointment,
-          message: 'Agendamento criado sem consumo de sessão: ' + error.message
+          message: 'Agendamento criado sem consumo de sessão: ' + error.message,
         };
       }
     }
@@ -205,7 +228,13 @@ export class AppointmentsService {
       include: {
         therapist: true,
         service: {
-          select: { id: true, name: true, description: true, price: true, averageDuration: true }
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            averageDuration: true,
+          },
         },
         branch: true,
       },
@@ -223,7 +252,13 @@ export class AppointmentsService {
       include: {
         client: true,
         service: {
-          select: { id: true, name: true, description: true, price: true, averageDuration: true }
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            averageDuration: true,
+          },
         },
         branch: true,
       },
@@ -243,12 +278,16 @@ export class AppointmentsService {
   }) {
     // Validar se o month foi fornecido
     if (!month) {
-      throw new BadRequestException('O parâmetro "month" é obrigatório no formato YYYY-MM');
+      throw new BadRequestException(
+        'O parâmetro "month" é obrigatório no formato YYYY-MM',
+      );
     }
 
     // Validar formato do month
     if (!/^\d{4}-\d{2}$/.test(month)) {
-      throw new BadRequestException('O parâmetro "month" deve estar no formato YYYY-MM');
+      throw new BadRequestException(
+        'O parâmetro "month" deve estar no formato YYYY-MM',
+      );
     }
 
     // Implementação simples para retornar uma array de datas disponíveis
@@ -267,7 +306,8 @@ export class AppointmentsService {
       // Usar a mesma lógica de cálculo de dia da semana
       const dateStr = d.toISOString().split('T')[0];
       const dayOfWeek = this.getDayOfWeekFromDateString(dateStr);
-      if (dayOfWeek !== 0) { // 0 = domingo no formato 1-7
+      if (dayOfWeek !== 0) {
+        // 0 = domingo no formato 1-7
         dates.push(new Date(d));
       }
     }
@@ -293,7 +333,9 @@ export class AppointmentsService {
   }) {
     // Validar parâmetros obrigatórios
     if (!date) {
-      throw new BadRequestException('O parâmetro "date" é obrigatório no formato YYYY-MM-DD');
+      throw new BadRequestException(
+        'O parâmetro "date" é obrigatório no formato YYYY-MM-DD',
+      );
     }
 
     if (!therapistId) {
@@ -302,7 +344,9 @@ export class AppointmentsService {
 
     // Validar formato da data
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      throw new BadRequestException('O parâmetro "date" deve estar no formato YYYY-MM-DD');
+      throw new BadRequestException(
+        'O parâmetro "date" deve estar no formato YYYY-MM-DD',
+      );
     }
 
     // Implementação simples para retornar slots disponíveis
@@ -431,17 +475,23 @@ export class AppointmentsService {
         where,
         include: {
           client: {
-            select: { id: true, name: true, email: true, phone: true }
+            select: { id: true, name: true, email: true, phone: true },
           },
           therapist: {
-            select: { id: true, name: true, specialty: true }
+            select: { id: true, name: true, specialty: true },
           },
           service: {
-            select: { id: true, name: true, description: true, price: true, averageDuration: true }
+            select: {
+              id: true,
+              name: true,
+              description: true,
+              price: true,
+              averageDuration: true,
+            },
           },
           branch: {
-            select: { id: true, name: true }
-          }
+            select: { id: true, name: true },
+          },
         },
         orderBy: {
           date: 'desc',
@@ -449,7 +499,7 @@ export class AppointmentsService {
         skip,
         take: limit,
       }),
-      this.prisma.appointment.count({ where })
+      this.prisma.appointment.count({ where }),
     ]);
 
     return {
@@ -457,16 +507,16 @@ export class AppointmentsService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
     };
   }
   async update(id: string, data: any) {
     const updatedData = { ...data };
-    
+
     if (updatedData.date && typeof updatedData.date === 'string') {
       updatedData.date = new Date(updatedData.date + 'T00:00:00.000Z');
     }
-    
+
     return this.prisma.appointment.update({
       where: { id },
       data: updatedData,
@@ -519,7 +569,13 @@ export class AppointmentsService {
         client: true,
         therapist: true,
         service: {
-          select: { id: true, name: true, description: true, price: true, averageDuration: true }
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            averageDuration: true,
+          },
         },
         branch: true,
       },

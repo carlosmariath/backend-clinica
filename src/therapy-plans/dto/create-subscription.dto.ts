@@ -14,4 +14,4 @@ export class CreateSubscriptionDto {
   @IsUUID()
   @IsOptional()
   branchId?: string;
-} 
+}

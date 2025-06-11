@@ -30,7 +30,11 @@ export class DashboardService {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const startOfPreviousMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() - 1,
+      1,
+    );
     const endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
@@ -48,112 +52,120 @@ export class DashboardService {
         revenueCurrentMonth,
         revenuePreviousMonth,
       ] = await Promise.all([
-      this.prisma.appointment.count({
-        where: {
-          date: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+        this.prisma.appointment.count({
+          where: {
+            date: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
           },
-        },
-      }),
-      this.prisma.appointment.count({
-        where: {
-          date: {
-            gte: startOfPreviousMonth,
-            lte: endOfPreviousMonth,
+        }),
+        this.prisma.appointment.count({
+          where: {
+            date: {
+              gte: startOfPreviousMonth,
+              lte: endOfPreviousMonth,
+            },
           },
-        },
-      }),
-      this.prisma.appointment.count({
-        where: {
-          status: 'CONFIRMED',
-          date: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+        }),
+        this.prisma.appointment.count({
+          where: {
+            status: 'CONFIRMED',
+            date: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
           },
-        },
-      }),
-      this.prisma.appointment.count({
-        where: {
-          status: 'CANCELED',
-          date: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+        }),
+        this.prisma.appointment.count({
+          where: {
+            status: 'CANCELED',
+            date: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
           },
-        },
-      }),
-      this.prisma.appointment.count({
-        where: {
-          status: 'PENDING',
-          date: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+        }),
+        this.prisma.appointment.count({
+          where: {
+            status: 'PENDING',
+            date: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
           },
-        },
-      }),
-      this.prisma.user.count({
-        where: {
-          role: 'CLIENT',
-        },
-      }),
-      this.prisma.appointment.findMany({
-        where: {
-          date: {
-            gte: thirtyDaysAgo,
+        }),
+        this.prisma.user.count({
+          where: {
+            role: 'CLIENT',
           },
-        },
-        select: {
-          clientId: true,
-        },
-        distinct: ['clientId'],
-      }),
-      this.prisma.user.count({
-        where: {
-          role: 'CLIENT',
-          createdAt: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+        }),
+        this.prisma.appointment.findMany({
+          where: {
+            date: {
+              gte: thirtyDaysAgo,
+            },
           },
-        },
-      }),
-      this.prisma.therapist.count(),
-      this.prisma.financialTransaction.aggregate({
-        where: {
-          type: 'REVENUE',
-          date: {
-            gte: startOfMonth,
-            lte: endOfMonth,
+          select: {
+            clientId: true,
           },
-        },
-        _sum: {
-          amount: true,
-        },
-      }).catch(() => ({ _sum: { amount: 0 } })),
-      this.prisma.financialTransaction.aggregate({
-        where: {
-          type: 'REVENUE',
-          date: {
-            gte: startOfPreviousMonth,
-            lte: endOfPreviousMonth,
+          distinct: ['clientId'],
+        }),
+        this.prisma.user.count({
+          where: {
+            role: 'CLIENT',
+            createdAt: {
+              gte: startOfMonth,
+              lte: endOfMonth,
+            },
           },
-        },
-        _sum: {
-          amount: true,
-        },
-      }).catch(() => ({ _sum: { amount: 0 } })),
-    ]);
+        }),
+        this.prisma.therapist.count(),
+        this.prisma.financialTransaction
+          .aggregate({
+            where: {
+              type: 'REVENUE',
+              date: {
+                gte: startOfMonth,
+                lte: endOfMonth,
+              },
+            },
+            _sum: {
+              amount: true,
+            },
+          })
+          .catch(() => ({ _sum: { amount: 0 } })),
+        this.prisma.financialTransaction
+          .aggregate({
+            where: {
+              type: 'REVENUE',
+              date: {
+                gte: startOfPreviousMonth,
+                lte: endOfPreviousMonth,
+              },
+            },
+            _sum: {
+              amount: true,
+            },
+          })
+          .catch(() => ({ _sum: { amount: 0 } })),
+      ]);
 
       const activeClients = activeClientsData.length;
       const currentRevenue = revenueCurrentMonth._sum?.amount || 0;
       const previousRevenue = revenuePreviousMonth._sum?.amount || 0;
 
-      const confirmationRate = totalAppointmentsCurrentMonth > 0
-        ? (confirmedSessions / totalAppointmentsCurrentMonth) * 100
-        : 0;
+      const confirmationRate =
+        totalAppointmentsCurrentMonth > 0
+          ? (confirmedSessions / totalAppointmentsCurrentMonth) * 100
+          : 0;
 
-      const appointmentsTrend = totalAppointmentsPreviousMonth > 0
-        ? ((totalAppointmentsCurrentMonth - totalAppointmentsPreviousMonth) / totalAppointmentsPreviousMonth) * 100
-        : 0;
+      const appointmentsTrend =
+        totalAppointmentsPreviousMonth > 0
+          ? ((totalAppointmentsCurrentMonth - totalAppointmentsPreviousMonth) /
+              totalAppointmentsPreviousMonth) *
+            100
+          : 0;
 
       const previousMonthClients = await this.prisma.user.count({
         where: {
@@ -165,13 +177,17 @@ export class DashboardService {
       });
 
       const currentMonthClients = clientsCount;
-      const clientsTrend = previousMonthClients > 0
-        ? ((currentMonthClients - previousMonthClients) / previousMonthClients) * 100
-        : 0;
+      const clientsTrend =
+        previousMonthClients > 0
+          ? ((currentMonthClients - previousMonthClients) /
+              previousMonthClients) *
+            100
+          : 0;
 
-      const revenueTrend = previousRevenue > 0
-        ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
-        : 0;
+      const revenueTrend =
+        previousRevenue > 0
+          ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
+          : 0;
 
       return {
         totalAppointments: totalAppointmentsCurrentMonth,
@@ -219,7 +235,7 @@ export class DashboardService {
 
   async getUpcomingAppointments(limit: number = 5) {
     const now = new Date();
-    
+
     const appointments = await this.prisma.appointment.findMany({
       where: {
         date: {
@@ -243,14 +259,11 @@ export class DashboardService {
           },
         },
       },
-      orderBy: [
-        { date: 'asc' },
-        { startTime: 'asc' },
-      ],
+      orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
       take: limit,
     });
 
-    return appointments.map(appointment => ({
+    return appointments.map((appointment) => ({
       id: appointment.id,
       clientId: appointment.clientId,
       clientName: appointment.client.name,
@@ -266,7 +279,7 @@ export class DashboardService {
   async getRevenueChart(period: 'week' | 'month' | 'year' = 'month') {
     const now = new Date();
     let startDate: Date;
-    let labels: string[] = [];
+    const labels: string[] = [];
     let groupBy: string;
 
     switch (period) {
@@ -274,7 +287,12 @@ export class DashboardService {
         startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
         for (let i = 6; i >= 0; i--) {
           const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-          labels.push(date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }));
+          labels.push(
+            date.toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: 'short',
+            }),
+          );
         }
         groupBy = 'day';
         break;
@@ -288,43 +306,59 @@ export class DashboardService {
         break;
       default: // month
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
-        const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const daysInMonth = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+        ).getDate();
         for (let i = 1; i <= daysInMonth; i++) {
           const date = new Date(now.getFullYear(), now.getMonth(), i);
-          labels.push(date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }));
+          labels.push(
+            date.toLocaleDateString('pt-BR', {
+              day: '2-digit',
+              month: 'short',
+            }),
+          );
         }
         groupBy = 'day';
         break;
     }
 
-    const transactions: TransactionData[] = await this.prisma.financialTransaction.findMany({
-      where: {
-        type: 'REVENUE',
-        date: {
-          gte: startDate,
-          lte: now,
-        },
-      },
-      select: {
-        amount: true,
-        date: true,
-      },
-    }).catch(() => []);
+    const transactions: TransactionData[] =
+      await this.prisma.financialTransaction
+        .findMany({
+          where: {
+            type: 'REVENUE',
+            date: {
+              gte: startDate,
+              lte: now,
+            },
+          },
+          select: {
+            amount: true,
+            date: true,
+          },
+        })
+        .catch(() => []);
 
     const data = new Array(labels.length).fill(0);
-    
-    transactions.forEach(transaction => {
+
+    transactions.forEach((transaction) => {
       let index: number;
-      
+
       if (period === 'week') {
-        const daysDiff = Math.floor((transaction.date.getTime() - startDate.getTime()) / (24 * 60 * 60 * 1000));
+        const daysDiff = Math.floor(
+          (transaction.date.getTime() - startDate.getTime()) /
+            (24 * 60 * 60 * 1000),
+        );
         index = daysDiff;
       } else if (period === 'year') {
         index = transaction.date.getMonth();
-      } else { // month
+      } else {
+        // month
         index = transaction.date.getDate() - 1;
       }
-      
+
       if (index >= 0 && index < data.length) {
         data[index] += Number(transaction.amount);
       }
@@ -351,9 +385,12 @@ export class DashboardService {
       },
     });
 
-    const totalAppointments = appointmentCounts.reduce((sum, item) => sum + item._count.id, 0);
+    const totalAppointments = appointmentCounts.reduce(
+      (sum, item) => sum + item._count.id,
+      0,
+    );
 
-    const therapistIds = appointmentCounts.map(item => item.therapistId);
+    const therapistIds = appointmentCounts.map((item) => item.therapistId);
     const therapists = await this.prisma.therapist.findMany({
       where: {
         id: {
@@ -366,10 +403,11 @@ export class DashboardService {
       },
     });
 
-    const result = appointmentCounts.map(item => {
-      const therapist = therapists.find(t => t.id === item.therapistId);
+    const result = appointmentCounts.map((item) => {
+      const therapist = therapists.find((t) => t.id === item.therapistId);
       const count = item._count.id;
-      const percentage = totalAppointments > 0 ? (count / totalAppointments) * 100 : 0;
+      const percentage =
+        totalAppointments > 0 ? (count / totalAppointments) * 100 : 0;
 
       return {
         therapistId: item.therapistId,
@@ -390,9 +428,14 @@ export class DashboardService {
       },
     });
 
-    const totalAppointments = serviceCounts.reduce((sum, item) => sum + item._count.id, 0);
+    const totalAppointments = serviceCounts.reduce(
+      (sum, item) => sum + item._count.id,
+      0,
+    );
 
-    const serviceIds = serviceCounts.map(item => item.serviceId).filter(id => id !== null);
+    const serviceIds = serviceCounts
+      .map((item) => item.serviceId)
+      .filter((id) => id !== null);
     const services = await this.prisma.service.findMany({
       where: {
         id: {
@@ -405,10 +448,11 @@ export class DashboardService {
       },
     });
 
-    const result = serviceCounts.map(item => {
-      const service = services.find(s => s.id === item.serviceId);
+    const result = serviceCounts.map((item) => {
+      const service = services.find((s) => s.id === item.serviceId);
       const count = item._count.id;
-      const percentage = totalAppointments > 0 ? (count / totalAppointments) * 100 : 0;
+      const percentage =
+        totalAppointments > 0 ? (count / totalAppointments) * 100 : 0;
 
       return {
         serviceId: item.serviceId || 'no-service',
@@ -421,7 +465,10 @@ export class DashboardService {
     return result.sort((a, b) => b.count - a.count);
   }
 
-  async getFullDashboard(upcomingLimit: number = 5, revenueChartPeriod: 'week' | 'month' | 'year' = 'month') {
+  async getFullDashboard(
+    upcomingLimit: number = 5,
+    revenueChartPeriod: 'week' | 'month' | 'year' = 'month',
+  ) {
     const [
       stats,
       upcomingAppointments,

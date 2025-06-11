@@ -17,13 +17,13 @@ export class UsersService {
   ) {
     const hashedPassword = await bcrypt.hash(password, 10);
     return this.prisma.user.create({
-      data: { 
-        name, 
-        email, 
-        password: hashedPassword, 
-        role, 
-        phone, 
-        branchId 
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role,
+        phone,
+        branchId,
       },
       select: {
         id: true,
@@ -32,35 +32,31 @@ export class UsersService {
         role: true,
         phone: true,
         branchId: true,
-        createdAt: true
-      }
+        createdAt: true,
+      },
     });
   }
 
   // Criar um novo cliente (usuário com role CLIENT)
-  async createClient(
-    name: string,
-    email: string,
-    phone?: string,
-  ) {
+  async createClient(name: string, email: string, phone?: string) {
     // Gerar uma senha aleatória temporária que o cliente pode alterar depois
     const temporaryPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
-    
+
     return this.prisma.user.create({
-      data: { 
-        name, 
-        email, 
-        password: hashedPassword, 
-        role: 'CLIENT', 
-        phone: phone || ''  // Garantir que phone seja sempre string
+      data: {
+        name,
+        email,
+        password: hashedPassword,
+        role: 'CLIENT',
+        phone: phone || '', // Garantir que phone seja sempre string
       },
       select: {
         id: true,
         name: true,
         email: true,
-        phone: true
-      }
+        phone: true,
+      },
     });
   }
 
@@ -76,14 +72,14 @@ export class UsersService {
 
   async findAllClients(page: number = 1, limit: number = 20) {
     const skip = (page - 1) * limit;
-    
+
     const [clients, total] = await Promise.all([
       this.prisma.user.findMany({
         where: { role: 'CLIENT' },
-        select: { 
-          id: true, 
-          name: true, 
-          email: true, 
+        select: {
+          id: true,
+          name: true,
+          email: true,
           phone: true,
           subscriptions: {
             include: {
@@ -94,29 +90,29 @@ export class UsersService {
                   description: true,
                   totalSessions: true,
                   totalPrice: true,
-                  validityDays: true
-                }
-              }
+                  validityDays: true,
+                },
+              },
             },
             where: {
               status: {
-                in: ['ACTIVE', 'PENDING', 'EXPIRED']
-              }
+                in: ['ACTIVE', 'PENDING', 'EXPIRED'],
+              },
             },
             orderBy: {
-              createdAt: 'desc'
-            }
-          }
+              createdAt: 'desc',
+            },
+          },
         },
         orderBy: {
-          name: 'asc'
+          name: 'asc',
         },
         skip,
-        take: limit
+        take: limit,
       }),
       this.prisma.user.count({
-        where: { role: 'CLIENT' }
-      })
+        where: { role: 'CLIENT' },
+      }),
     ]);
 
     return {
@@ -124,7 +120,7 @@ export class UsersService {
       total,
       page,
       limit,
-      totalPages: Math.ceil(total / limit)
+      totalPages: Math.ceil(total / limit),
     };
   }
 
@@ -138,12 +134,12 @@ export class UsersService {
       },
       select: {
         id: true,
-        name: true, 
+        name: true,
         email: true,
         phone: true,
         role: true,
         branchId: true,
-        createdAt: true
+        createdAt: true,
       },
       orderBy: {
         createdAt: 'desc',

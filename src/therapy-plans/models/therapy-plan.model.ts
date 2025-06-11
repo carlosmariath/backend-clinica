@@ -20,10 +20,10 @@ export class TherapyPlan {
    * Converte um plano do Prisma para o modelo otimizado
    */
   static fromPrisma(
-    plan: PrismaTherapyPlan & { 
-      branches?: Branch[]; 
-      _count?: { subscriptions: number } 
-    }
+    plan: PrismaTherapyPlan & {
+      branches?: Branch[];
+      _count?: { subscriptions: number };
+    },
   ): TherapyPlan {
     return {
       id: plan.id,
@@ -35,13 +35,13 @@ export class TherapyPlan {
       isActive: plan.isActive,
       createdAt: plan.createdAt,
       updatedAt: plan.updatedAt,
-      branches: plan.branches 
-        ? plan.branches.map(branch => ({
+      branches: plan.branches
+        ? plan.branches.map((branch) => ({
             id: branch.id,
-            name: branch.name
+            name: branch.name,
           }))
         : [],
-      subscriptionCount: plan._count?.subscriptions
+      subscriptionCount: plan._count?.subscriptions,
     };
   }
 
@@ -49,12 +49,12 @@ export class TherapyPlan {
    * Converte uma lista de planos do Prisma para o modelo otimizado
    */
   static fromPrismaList(
-    plans: (PrismaTherapyPlan & { 
-      branches?: Branch[]; 
-      _count?: { subscriptions: number } 
-    })[]
+    plans: (PrismaTherapyPlan & {
+      branches?: Branch[];
+      _count?: { subscriptions: number };
+    })[],
   ): TherapyPlan[] {
-    return plans.map(plan => TherapyPlan.fromPrisma(plan));
+    return plans.map((plan) => TherapyPlan.fromPrisma(plan));
   }
 }
 
@@ -75,4 +75,4 @@ export class TherapyPlanSummary {
   totalSessions: number;
   totalPrice: number;
   isActive: boolean;
-} 
+}

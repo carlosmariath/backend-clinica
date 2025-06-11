@@ -41,9 +41,12 @@ export class DashboardController {
   @Get('full')
   async getFullDashboard(
     @Query('upcomingLimit') upcomingLimit?: string,
-    @Query('period') period?: 'week' | 'month' | 'year'
+    @Query('period') period?: 'week' | 'month' | 'year',
   ) {
     const parsedLimit = upcomingLimit ? parseInt(upcomingLimit, 10) : 5;
-    return this.dashboardService.getFullDashboard(parsedLimit, period || 'month');
+    return this.dashboardService.getFullDashboard(
+      parsedLimit,
+      period || 'month',
+    );
   }
 }

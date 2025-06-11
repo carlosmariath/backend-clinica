@@ -8,7 +8,11 @@ import { SessionConsumptionService } from './session-consumption.service';
 @Module({
   imports: [PrismaModule],
   controllers: [TherapyPlansController],
-  providers: [TherapyPlanService, TherapyPlansService, SessionConsumptionService],
-  exports: [TherapyPlanService, TherapyPlansService, SessionConsumptionService]
+  providers: [
+    TherapyPlanService,
+    TherapyPlansService,
+    SessionConsumptionService,
+  ],
+  exports: [TherapyPlanService, TherapyPlansService, SessionConsumptionService],
 })
 export class TherapyPlansModule {}

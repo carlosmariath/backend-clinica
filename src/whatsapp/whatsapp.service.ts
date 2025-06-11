@@ -258,12 +258,12 @@ export class WhatsappService {
       therapistId,
       month,
     });
-    
+
     // Corrigir acesso ao objeto retornado, que tem uma propriedade 'dates'
     const availableDates = availableDatesObj.dates
       .filter((d) => d.available)
       .map((d) => d.date);
-      
+
     const message =
       'Aqui estão as datas disponíveis para agendamento:\n' +
       availableDates.map((date) => `📅 ${date}`).join('\n');
@@ -281,12 +281,12 @@ export class WhatsappService {
       therapistId,
       date,
     });
-    
+
     // Corrigir acesso ao objeto retornado, que tem uma propriedade 'slots'
     const availableTimes = availableTimesObj.slots
-      .filter(slot => slot.available)
-      .map(slot => slot.time);
-      
+      .filter((slot) => slot.available)
+      .map((slot) => slot.time);
+
     const message =
       'Aqui estão os horários disponíveis para a data selecionada:\n' +
       availableTimes.map((time) => `🕒 ${time}`).join('\n');

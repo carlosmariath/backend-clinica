@@ -1,4 +1,11 @@
-import { IsBoolean, IsNumber, IsOptional, IsPositive, IsString, IsUUID } from 'class-validator';
+import {
+  IsBoolean,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 // Interface para simplificar a estrutura das filiais
@@ -52,11 +59,17 @@ export class TherapyPlanDto {
   @ApiProperty({ description: 'Data de atualização do plano' })
   updatedAt: Date;
 
-  @ApiProperty({ description: 'Filiais associadas ao plano', type: [BranchDto] })
+  @ApiProperty({
+    description: 'Filiais associadas ao plano',
+    type: [BranchDto],
+  })
   branches: BranchDto[];
 
-  @ApiProperty({ description: 'Número de assinaturas deste plano', required: false })
+  @ApiProperty({
+    description: 'Número de assinaturas deste plano',
+    required: false,
+  })
   @IsNumber()
   @IsOptional()
   subscriptionCount?: number;
-} 
+}

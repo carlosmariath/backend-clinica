@@ -20,7 +20,7 @@ import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ 
+    ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
       expandVariables: true,

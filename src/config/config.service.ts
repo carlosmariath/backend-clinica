@@ -44,10 +44,13 @@ export class AppConfigService {
 
   // Context Prompt
   get contextPrompt(): string {
-    return this.configService.get<string>('CONTEXT_PROMPT') || `
+    return (
+      this.configService.get<string>('CONTEXT_PROMPT') ||
+      `
       Você é um assistente virtual para uma clínica de massagens e terapias. 
       Seu nome é ZenBot, e sua função é ajudar clientes a agendarem sessões.
-    `;
+    `
+    );
   }
 
   // Pinecone
@@ -69,26 +72,29 @@ export class AppConfigService {
     if (origins) {
       return origins.split(',');
     }
-    
-    return this.nodeEnv === 'production' 
-      ? ['https://painel-clinica.vercel.app'] 
-      : ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'];
+
+    return this.nodeEnv === 'production'
+      ? ['https://painel-clinica.vercel.app']
+      : [
+          'http://localhost:5173',
+          'http://localhost:5174',
+          'http://localhost:5175',
+        ];
   }
 
   // Validation method
   validateConfig(): void {
-    const requiredVars = [
-      'DATABASE_URL',
-      'JWT_SECRET'
-    ];
+    const requiredVars = ['DATABASE_URL', 'JWT_SECRET'];
 
-    const missingVars = requiredVars.filter(varName => {
+    const missingVars = requiredVars.filter((varName) => {
       const value = this.configService.get<string>(varName);
       return !value || value.trim() === '';
     });
 
     if (missingVars.length > 0) {
-      throw new Error(`Missing required environment variables: ${missingVars.join(', ')}`);
+      throw new Error(
+        `Missing required environment variables: ${missingVars.join(', ')}`,
+      );
     }
 
     console.log('✅ Environment variables validated successfully');
@@ -100,11 +106,21 @@ export class AppConfigService {
       console.log('🔧 Configuration loaded:');
       console.log(`  - NODE_ENV: ${this.nodeEnv}`);
       console.log(`  - PORT: ${this.port}`);
-      console.log(`  - DATABASE_URL: ${this.databaseUrl ? '✅ Set' : '❌ Missing'}`);
-      console.log(`  - JWT_SECRET: ${this.jwtSecret ? '✅ Set' : '❌ Missing'}`);
-      console.log(`  - WHATSAPP_TOKEN: ${this.whatsappToken ? '✅ Set' : '❌ Missing'}`);
-      console.log(`  - OPENAI_API_KEY: ${this.openaiApiKey ? '✅ Set' : '❌ Missing'}`);
-      console.log(`  - PINECONE_API_KEY: ${this.pineconeApiKey ? '✅ Set' : '❌ Missing'}`);
+      console.log(
+        `  - DATABASE_URL: ${this.databaseUrl ? '✅ Set' : '❌ Missing'}`,
+      );
+      console.log(
+        `  - JWT_SECRET: ${this.jwtSecret ? '✅ Set' : '❌ Missing'}`,
+      );
+      console.log(
+        `  - WHATSAPP_TOKEN: ${this.whatsappToken ? '✅ Set' : '❌ Missing'}`,
+      );
+      console.log(
+        `  - OPENAI_API_KEY: ${this.openaiApiKey ? '✅ Set' : '❌ Missing'}`,
+      );
+      console.log(
+        `  - PINECONE_API_KEY: ${this.pineconeApiKey ? '✅ Set' : '❌ Missing'}`,
+      );
       console.log(`  - CORS_ORIGINS: ${this.corsOrigins.join(', ')}`);
     }
   }

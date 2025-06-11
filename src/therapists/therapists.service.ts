@@ -9,14 +9,14 @@ export class TherapistsService {
   private getDayOfWeekFromDateString(dateString: string): number {
     // Parse manual da data para evitar problemas de timezone
     const [year, month, day] = dateString.split('-').map(Number);
-    
+
     // Criar data em UTC meia-noite
     const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // Meio-dia UTC para evitar edge cases
-    
+
     // Aplicar offset do timezone de São Paulo (-3 horas)
     const saoPauloOffset = -3 * 60; // -3 horas em minutos
     const saoPauloDate = new Date(date.getTime() + saoPauloOffset * 60 * 1000);
-    
+
     // Retorna 0-6 (Domingo-Sábado) - formato padrão JavaScript
     return saoPauloDate.getUTCDay() + 1 == 8 ? 0 : saoPauloDate.getUTCDay() + 1;
   }

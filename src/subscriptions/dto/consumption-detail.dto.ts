@@ -12,4 +12,4 @@ export class ConsumptionDetailDto {
 
   @ApiProperty({ description: 'ID da filial onde a sessão foi consumida' })
   branchId: string;
-} 
+}

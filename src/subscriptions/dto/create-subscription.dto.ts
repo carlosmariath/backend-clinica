@@ -12,8 +12,10 @@ export class CreateSubscriptionDto {
   @IsUUID()
   planId: string;
 
-  @ApiProperty({ description: 'ID da filial onde a assinatura foi criada (opcional)' })
+  @ApiProperty({
+    description: 'ID da filial onde a assinatura foi criada (opcional)',
+  })
   @IsOptional()
   @IsUUID()
   branchId?: string;
-} 
+}

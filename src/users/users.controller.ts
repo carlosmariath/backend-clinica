@@ -33,11 +33,11 @@ export class UsersController {
   @Get('clients/paginated')
   async listClientsPaginated(
     @Query('page') page?: string,
-    @Query('limit') limit?: string
+    @Query('limit') limit?: string,
   ) {
     const pageNum = parseInt(page || '1', 10);
     const limitNum = parseInt(limit || '20', 10);
-    
+
     return this.usersService.findAllClients(pageNum, limitNum);
   }
 

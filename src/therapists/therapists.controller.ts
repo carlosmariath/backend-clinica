@@ -113,7 +113,7 @@ export class TherapistsController {
       startTime: string;
       endTime: string;
       branchId: string; // Parâmetro branchId obrigatório
-      id?: string;      // ID opcional para edição
+      id?: string; // ID opcional para edição
     },
   ) {
     try {
@@ -130,7 +130,9 @@ export class TherapistsController {
       }
 
       if (!body.startTime || !body.endTime) {
-        throw new BadRequestException('Horários de início e fim são obrigatórios');
+        throw new BadRequestException(
+          'Horários de início e fim são obrigatórios',
+        );
       }
 
       if (!body.branchId) {
@@ -246,7 +248,8 @@ export class TherapistsController {
   async checkScheduleConflicts(
     @Req() req,
     @Param('therapistId') therapistId: string,
-    @Body() scheduleData: {
+    @Body()
+    scheduleData: {
       dayOfWeek: number;
       startTime: string;
       endTime: string;
@@ -260,7 +263,10 @@ export class TherapistsController {
         'Você só pode verificar seus próprios horários.',
       );
     }
-    return this.therapistsService.checkScheduleConflicts(therapistId, scheduleData);
+    return this.therapistsService.checkScheduleConflicts(
+      therapistId,
+      scheduleData,
+    );
   }
 
   // 🔹 Buscar disponibilidade de um terapeuta para uma data específica em uma filial
@@ -274,7 +280,11 @@ export class TherapistsController {
     if (!date) {
       throw new BadRequestException('Data é obrigatória');
     }
-    return this.therapistsService.getAvailableTimeSlots(therapistId, date, branchId);
+    return this.therapistsService.getAvailableTimeSlots(
+      therapistId,
+      date,
+      branchId,
+    );
   }
 
   // 🔹 Buscar disponibilidade de um terapeuta em todas as filiais para uma data
@@ -287,7 +297,10 @@ export class TherapistsController {
     if (!date) {
       throw new BadRequestException('Data é obrigatória');
     }
-    return this.therapistsService.getTherapistAvailabilityAcrossBranches(therapistId, date);
+    return this.therapistsService.getTherapistAvailabilityAcrossBranches(
+      therapistId,
+      date,
+    );
   }
 
   // 🔹 Remover um horário de terapeuta (ADMIN ou o próprio terapeuta)
@@ -342,9 +355,12 @@ export class TherapistsController {
         'Você só pode remover seus próprios horários.',
       );
     }
-    
+
     try {
-      return this.therapistsService.removeAllSchedulesFromBranch(therapistId, branchId);
+      return this.therapistsService.removeAllSchedulesFromBranch(
+        therapistId,
+        branchId,
+      );
     } catch (error) {
       if (error.message === 'O terapeuta não pertence a esta filial') {
         throw new BadRequestException(error.message);

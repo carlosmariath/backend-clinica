@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { differenceInHours } from 'date-fns';
 
@@ -8,7 +12,7 @@ enum SubscriptionStatus {
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
   EXPIRED = 'EXPIRED',
-  CANCELED = 'CANCELED'
+  CANCELED = 'CANCELED',
 }
 
 enum AppointmentStatus {
@@ -16,7 +20,7 @@ enum AppointmentStatus {
   CONFIRMED = 'CONFIRMED',
   CANCELED = 'CANCELED',
   COMPLETED = 'COMPLETED',
-  NO_SHOW = 'NO_SHOW'
+  NO_SHOW = 'NO_SHOW',
 }
 
 @Injectable()
@@ -24,7 +28,11 @@ export class SessionConsumptionService {
   constructor(private prisma: PrismaService) {}
 
   // Consumir uma sessão de uma subscrição específica para um agendamento
-  async consumeSessionForAppointment(subscriptionId: string, appointmentId: string, branchId?: string) {
+  async consumeSessionForAppointment(
+    subscriptionId: string,
+    appointmentId: string,
+    branchId?: string,
+  ) {
     // Verificar se o agendamento existe
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -35,16 +43,21 @@ export class SessionConsumptionService {
     });
 
     if (!appointment) {
-      throw new NotFoundException(`Agendamento com ID ${appointmentId} não encontrado`);
+      throw new NotFoundException(
+        `Agendamento com ID ${appointmentId} não encontrado`,
+      );
     }
 
     // Verificar se o agendamento já tem um consumo associado
-    const existingConsumption = await this.prisma.subscriptionConsumption.findUnique({
-      where: { appointmentId },
-    });
+    const existingConsumption =
+      await this.prisma.subscriptionConsumption.findUnique({
+        where: { appointmentId },
+      });
 
     if (existingConsumption) {
-      throw new BadRequestException(`Este agendamento já possui um consumo de sessão associado`);
+      throw new BadRequestException(
+        `Este agendamento já possui um consumo de sessão associado`,
+      );
     }
 
     // Buscar a subscrição específica
@@ -56,24 +69,35 @@ export class SessionConsumptionService {
     });
 
     if (!subscription) {
-      throw new NotFoundException(`Subscrição com ID ${subscriptionId} não encontrada`);
+      throw new NotFoundException(
+        `Subscrição com ID ${subscriptionId} não encontrada`,
+      );
     }
 
     if (subscription.clientId !== appointment.clientId) {
-      throw new BadRequestException(`Esta subscrição não pertence ao cliente do agendamento`);
+      throw new BadRequestException(
+        `Esta subscrição não pertence ao cliente do agendamento`,
+      );
     }
 
     if (subscription.status !== SubscriptionStatus.ACTIVE) {
-      throw new BadRequestException(`A subscrição não está ativa. Status atual: ${subscription.status}`);
+      throw new BadRequestException(
+        `A subscrição não está ativa. Status atual: ${subscription.status}`,
+      );
     }
 
     if (subscription.remainingSessions <= 0) {
-      throw new BadRequestException(`A subscrição não possui sessões disponíveis`);
+      throw new BadRequestException(
+        `A subscrição não possui sessões disponíveis`,
+      );
     }
 
     // Verificar se há um branchId válido
-    const finalBranchId = branchId || appointment.branchId || '2e65c193-e010-4a5d-9c91-2aa8c5935c99'; // ID da filial padrão
-    
+    const finalBranchId =
+      branchId ||
+      appointment.branchId ||
+      '2e65c193-e010-4a5d-9c91-2aa8c5935c99'; // ID da filial padrão
+
     // Usar transação para garantir atomicidade
     return this.prisma.$transaction(async (prisma) => {
       // Criar o consumo de sessão
@@ -99,8 +123,10 @@ export class SessionConsumptionService {
       });
 
       // Criar transação financeira para a sessão
-      const sessionPrice = subscription.therapyPlan.totalPrice / subscription.therapyPlan.totalSessions;
-      
+      const sessionPrice =
+        subscription.therapyPlan.totalPrice /
+        subscription.therapyPlan.totalSessions;
+
       await prisma.financialTransaction.create({
         data: {
           type: 'REVENUE',
@@ -135,16 +161,21 @@ export class SessionConsumptionService {
     });
 
     if (!appointment) {
-      throw new NotFoundException(`Agendamento com ID ${appointmentId} não encontrado`);
+      throw new NotFoundException(
+        `Agendamento com ID ${appointmentId} não encontrado`,
+      );
     }
 
     // Verificar se o agendamento já tem um consumo associado
-    const existingConsumption = await this.prisma.subscriptionConsumption.findUnique({
-      where: { appointmentId },
-    });
+    const existingConsumption =
+      await this.prisma.subscriptionConsumption.findUnique({
+        where: { appointmentId },
+      });
 
     if (existingConsumption) {
-      throw new BadRequestException(`Este agendamento já possui um consumo de sessão associado`);
+      throw new BadRequestException(
+        `Este agendamento já possui um consumo de sessão associado`,
+      );
     }
 
     // Buscar a subscrição ACTIVE mais antiga do cliente
@@ -169,8 +200,9 @@ export class SessionConsumptionService {
     }
 
     // Verificar se há um branchId válido
-    const branchId = appointment.branchId || '2e65c193-e010-4a5d-9c91-2aa8c5935c99'; // ID da filial padrão
-    
+    const branchId =
+      appointment.branchId || '2e65c193-e010-4a5d-9c91-2aa8c5935c99'; // ID da filial padrão
+
     // Usar transação para garantir atomicidade
     return this.prisma.$transaction(async (prisma) => {
       // Criar o consumo de sessão
@@ -196,8 +228,10 @@ export class SessionConsumptionService {
       });
 
       // Criar transação financeira para a sessão
-      const sessionPrice = activeSubscription.therapyPlan.totalPrice / activeSubscription.therapyPlan.totalSessions;
-      
+      const sessionPrice =
+        activeSubscription.therapyPlan.totalPrice /
+        activeSubscription.therapyPlan.totalSessions;
+
       await prisma.financialTransaction.create({
         data: {
           type: 'REVENUE',
@@ -221,7 +255,10 @@ export class SessionConsumptionService {
   }
 
   // Verificar se um cancelamento deve consumir sessão (se for com menos de 24h de antecedência)
-  async handleCancelation(appointmentId: string, applyNoShowFee: boolean = false) {
+  async handleCancelation(
+    appointmentId: string,
+    applyNoShowFee: boolean = false,
+  ) {
     // Verificar se o agendamento existe
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -231,32 +268,41 @@ export class SessionConsumptionService {
     });
 
     if (!appointment) {
-      throw new NotFoundException(`Agendamento com ID ${appointmentId} não encontrado`);
+      throw new NotFoundException(
+        `Agendamento com ID ${appointmentId} não encontrado`,
+      );
     }
 
     // Se o agendamento não tiver consumo, não há o que fazer
     if (!appointment.consumption) {
-      return { message: 'Este agendamento não tinha consumo de sessão para processar' };
+      return {
+        message: 'Este agendamento não tinha consumo de sessão para processar',
+      };
     }
 
     // Calculando a diferença de horas entre agora e a data do agendamento
     const hoursUntilAppointment = differenceInHours(
-      new Date(`${appointment.date.toISOString().split('T')[0]}T${appointment.startTime}`),
+      new Date(
+        `${appointment.date.toISOString().split('T')[0]}T${appointment.startTime}`,
+      ),
       new Date(),
     );
 
     // Se o cancelamento for com 24h ou mais de antecedência, estornar o consumo
     if (hoursUntilAppointment >= 24) {
-      return this.refundConsumption(appointment.consumption.id, 'Cancelamento com antecedência');
-    } 
+      return this.refundConsumption(
+        appointment.consumption.id,
+        'Cancelamento com antecedência',
+      );
+    }
     // Se for com menos de 24h, manter o consumo e possivelmente aplicar taxa de no-show
     else if (applyNoShowFee) {
       const noShowFee = appointment.noShowFee || 50; // Taxa padrão de 50 se não especificada
-      
+
       // Atualizar status para NO_SHOW
       await this.prisma.appointment.update({
         where: { id: appointmentId },
-        data: { 
+        data: {
           status: AppointmentStatus.NO_SHOW,
           noShowFee,
         },
@@ -277,8 +323,9 @@ export class SessionConsumptionService {
         },
       });
 
-      return { 
-        message: 'Cancelamento com menos de 24h de antecedência - consumo mantido e taxa de no-show aplicada',
+      return {
+        message:
+          'Cancelamento com menos de 24h de antecedência - consumo mantido e taxa de no-show aplicada',
         noShowFee,
       };
     } else {
@@ -288,8 +335,9 @@ export class SessionConsumptionService {
         data: { status: AppointmentStatus.CANCELED },
       });
 
-      return { 
-        message: 'Cancelamento com menos de 24h de antecedência - consumo mantido sem taxa de no-show',
+      return {
+        message:
+          'Cancelamento com menos de 24h de antecedência - consumo mantido sem taxa de no-show',
       };
     }
   }
@@ -306,7 +354,9 @@ export class SessionConsumptionService {
     });
 
     if (!consumption) {
-      throw new NotFoundException(`Consumo com ID ${consumptionId} não encontrado`);
+      throw new NotFoundException(
+        `Consumo com ID ${consumptionId} não encontrado`,
+      );
     }
 
     if (consumption.wasRefunded) {
@@ -331,10 +381,11 @@ export class SessionConsumptionService {
       });
 
       // Verificar se a subscrição ainda está válida ou se já expirou
-      const canRefundSession = subscription && (
-        subscription.status === SubscriptionStatus.ACTIVE || 
-        (subscription.status === SubscriptionStatus.COMPLETED && subscription.remainingSessions === 0)
-      );
+      const canRefundSession =
+        subscription &&
+        (subscription.status === SubscriptionStatus.ACTIVE ||
+          (subscription.status === SubscriptionStatus.COMPLETED &&
+            subscription.remainingSessions === 0));
 
       if (subscription && canRefundSession) {
         await prisma.subscription.update({
@@ -342,9 +393,11 @@ export class SessionConsumptionService {
           data: {
             remainingSessions: { increment: 1 },
             // Se estiver COMPLETED, voltar para ACTIVE
-            status: subscription && subscription.status === SubscriptionStatus.COMPLETED 
-              ? SubscriptionStatus.ACTIVE 
-              : undefined,
+            status:
+              subscription &&
+              subscription.status === SubscriptionStatus.COMPLETED
+                ? SubscriptionStatus.ACTIVE
+                : undefined,
           },
         });
       }
@@ -357,8 +410,10 @@ export class SessionConsumptionService {
 
       // Criar transação financeira de estorno
       if (subscription && subscription.therapyPlan) {
-        const sessionPrice = subscription.therapyPlan.totalPrice / subscription.therapyPlan.totalSessions;
-        
+        const sessionPrice =
+          subscription.therapyPlan.totalPrice /
+          subscription.therapyPlan.totalSessions;
+
         await prisma.financialTransaction.create({
           data: {
             type: 'EXPENSE',
@@ -377,15 +432,22 @@ export class SessionConsumptionService {
       return {
         message: 'Consumo estornado com sucesso',
         canRefundSession,
-        sessionPrice: subscription && subscription.therapyPlan 
-          ? subscription.therapyPlan.totalPrice / subscription.therapyPlan.totalSessions 
-          : null,
+        sessionPrice:
+          subscription && subscription.therapyPlan
+            ? subscription.therapyPlan.totalPrice /
+              subscription.therapyPlan.totalSessions
+            : null,
       };
     });
   }
 
   // Reagendar um agendamento (manter o mesmo consumo)
-  async rescheduleAppointment(appointmentId: string, newDate: Date, newStartTime: string, newEndTime: string) {
+  async rescheduleAppointment(
+    appointmentId: string,
+    newDate: Date,
+    newStartTime: string,
+    newEndTime: string,
+  ) {
     // Verificar se o agendamento existe
     const appointment = await this.prisma.appointment.findUnique({
       where: { id: appointmentId },
@@ -395,7 +457,9 @@ export class SessionConsumptionService {
     });
 
     if (!appointment) {
-      throw new NotFoundException(`Agendamento com ID ${appointmentId} não encontrado`);
+      throw new NotFoundException(
+        `Agendamento com ID ${appointmentId} não encontrado`,
+      );
     }
 
     // Atualizar o agendamento
@@ -415,4 +479,4 @@ export class SessionConsumptionService {
       appointment: updatedAppointment,
     };
   }
-} 
+}
