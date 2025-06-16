@@ -42,7 +42,7 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:dev-latest
 
     - name: Set AKS context
-      uses: azure/aks-set-context@v3
+      uses: azure/aks-set-context@v4
       with:
         resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
         cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
@@ -137,7 +137,7 @@ jobs:
         docker push ${{ secrets.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:prod-latest
 
     - name: Set AKS context
-      uses: azure/aks-set-context@v3
+      uses: azure/aks-set-context@v4
       with:
         resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
         cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
