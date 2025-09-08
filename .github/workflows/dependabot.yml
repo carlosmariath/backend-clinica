@@ -33,7 +33,7 @@ jobs:
         
       - name: ✅ Auto-approve
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.pulls.createReview({
@@ -46,7 +46,7 @@ jobs:
             
       - name: 🔄 Auto-merge
         if: success()
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             github.rest.pulls.merge({
